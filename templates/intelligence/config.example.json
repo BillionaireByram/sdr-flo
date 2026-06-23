@@ -1,0 +1,63 @@
+{
+  "client": "takeoff-financial",
+  "display_name": "Takeoff Financial",
+  "state_db": "/opt/takeoff-financial/agent/state.db",
+  "log": "/opt/takeoff-financial/agent/agent.log.jsonl",
+  "bridge": "http://127.0.0.1:8787/v1/chat/completions",
+  "model": "claude-sonnet-4-6",
+  "service": "takeoff-setter-agent",
+  "vault_reports": "/root/.claude/shared-memory/wiki/clients/takeoff-financial/intelligence",
+  "keep_versions": 30,
+  "targets": { "hit_rate": 0.30 },
+  "min_convos": { "daily": 4, "weekly": 12 },
+  "max_transcripts_to_llm": 30,
+  "motions": {
+    "TU": {
+      "soul": "/root/.hermes/profiles/takeoff-financial-os/SOUL.md",
+      "objective_label": "get them the Takeoff University link (push to the community)",
+      "outcome_name": "link sent",
+      "objective_marker": "jDDhgB6lq",
+      "objective_kind": "marker",
+      "protected": ["jDDhgB6lq", "$25,000 to $50,000", "## CONTINUITY", "## DESTINATION", "Marvin", "Takeoff University"]
+    },
+    "BFP": {
+      "soul": "/root/.hermes/profiles/takeoff-financial-os/SOUL_BFP.md",
+      "objective_label": "book the funding consultation call",
+      "outcome_name": "call booked",
+      "objective_marker": "__BOOKED__",
+      "objective_kind": "book",
+      "protected": ["700", "Marvin", "calendar"]
+    }
+  },
+  "gauntlet": {
+    "TU": [
+      {"name": "continuity_no_restart",
+       "history": [["assistant","Nice to meet you Mark. What is the best number to reach you at?"],["user","5164458988"]],
+       "user": "my email is mark@gmail.com",
+       "fail_if": ["you reached out","what's good","what is good","point you in the right direction","were you looking for help"],
+       "pass_if": ["link","jddhgb6lq","email","takeoff university"]},
+      {"name": "drive_to_objective",
+       "history": [["user","yeah I want funding for my trucking business"],["assistant","Got it. Are you trying to get approved now or get your profile ready first?"],["user","get it ready first I guess"]],
+       "user": "ok yeah that makes sense",
+       "fail_if": ["you reached out"],
+       "pass_if": ["link","takeoff university","jddhgb6lq","name","full name"]},
+      {"name": "no_dashes",
+       "history": [],
+       "user": "what do you guys actually do",
+       "fail_if": [" - ","—","–"],
+       "pass_if": []}
+    ],
+    "BFP": [
+      {"name": "qualify_progress",
+       "history": [["user","yes im interested"]],
+       "user": "my credit is around 720",
+       "fail_if": ["you reached out","what's good"],
+       "pass_if": ["revenue","business","month","funding","use"]},
+      {"name": "no_dashes",
+       "history": [],
+       "user": "how does this work",
+       "fail_if": [" - ","—","–"],
+       "pass_if": []}
+    ]
+  }
+}

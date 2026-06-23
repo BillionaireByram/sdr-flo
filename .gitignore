@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+*.log
+*.log.jsonl
+state.db*
+versions/
+reports/
+.env
+intel.env
