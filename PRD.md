@@ -93,4 +93,4 @@ Per-client VM (Proxmox) or pod. One AI Flo engine, an isolated profile per agent
 
 ## 12. Roadmap
 
-Cold email outreach engine (sequencer + warmup + deliverability) · real-time push · shared fleet dashboard · richer voice provider abstraction.
+Cold outbound engine — framework in [docs/09-outreach.md](docs/09-outreach.md) (deliverability-first, signal-anchored, gift-first, 3-7-7 multichannel, replies → the brain); runtime build next · real-time push · shared fleet dashboard · richer voice provider abstraction.

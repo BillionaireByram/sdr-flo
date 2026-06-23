@@ -63,7 +63,8 @@ sdr-flo/
 │   ├── 05-intelligence.md     ← scoreboard + champion/challenger optimizer
 │   ├── 06-backend-data.md     ← Supabase spine, Twenty CRM, the data model
 │   ├── 07-deployment.md       ← VM, systemd, auth (no API credits), per-client install
-│   └── 08-training-hermes.md  ← author SOUL/skills, train in-channel
+│   ├── 08-training-hermes.md  ← author SOUL/skills, train in-channel
+│   └── 09-outreach.md         ← cold outbound: deliverability, signals, copy, cadence
 ├── templates/
 │   ├── relay/                 ← the channel relay (capture → reason → reply)
 │   ├── intelligence/          ← scoreboard + optimizer engine + config
@@ -94,7 +95,7 @@ sdr-flo/
 
 ## Roadmap
 
-- Cold **email outreach** engine (sequencer + deliverability + warmup) — next.
+- Cold **outbound** engine — framework specced in [docs/09-outreach.md](docs/09-outreach.md) (deliverability-first, signal-anchored, gift-first, 3-7-7 multichannel, replies routed into the brain). Runtime build next.
 - Real-time push (sub-second) instead of polling.
 - Shared operator dashboard across the fleet.
 
