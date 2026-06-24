@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.4.0 — 2026-06-24 — Instagram social-CTA channel (comment->DM->qualify->book)
+First social channel adapter, `templates/channels/instagram/` — **official Meta Graph API only** (no unofficial/private API). Lifted the best open-source patterns (InstaAuto comment->DM + Supabase shape, ig-mcp official send paths) into our own brain-owning implementation.
+- Comment "FLO" keyword router -> public reply + private DM opener; DM replies route to the SDR Flo brain (NEPQ) to qualify + book.
+- Per-niche persona = **Byram's voice** (`SOUL.byram.md`) for Client Zero (his personal IG) — speaks as Byram, never "Flo" or any internal name.
+- Shadow-first (`SDR_FLO_DRAFT_ONLY=true`), idempotent (comment+message ids), suppression (opt-out/guard tags), no dashes, never fakes a booking. Writes leads/conversations/events/sources to the spine.
+- 10 tests + fixtures pass offline/dry-run; end-to-end dry-run proof verified.
+
+
 ## v0.3.0 — 2026-06-24 — Canonical + field-hardening + sales-brain reference
 - **Made sdr-flo the canonical framework** + locked the naming contract (SDR Flo / Setter Flo / Sales Flo / Agent Flo) in the README. `agent-flo/sales_flo` is now a reference implementation that conforms to this framework.
 - **Folded in agent-flo's sales-brain reference** at `templates/workflows/` (typed data model, qualify scoring, intent + **disposition taxonomy**, call-intelligence, daily report, escalation, sticky-suppression).

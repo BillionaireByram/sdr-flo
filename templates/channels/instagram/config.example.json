@@ -1,0 +1,18 @@
+{
+  "client": "digitalflo-client-zero",
+  "persona": "byram",
+  "objective": "book",
+  "campaigns": [
+    {
+      "label": "FLO",
+      "keywords": ["FLO", "flo"],
+      "campaign": "ig-organic-v1",
+      "offer": "their own AI operator (a version of what I run for DigitalFlo)",
+      "value_link": "",
+      "public_reply_enabled": true,
+      "public_reply": "just sent you a dm, check your inbox",
+      "private_dm_enabled": true,
+      "dm_opener": "Hey, appreciate you commenting. Quick q so I point you in the right direction, what does your business do and where are most of your leads coming from right now?"
+    }
+  ]
+}

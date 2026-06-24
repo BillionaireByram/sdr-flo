@@ -21,3 +21,6 @@ The relay ships with the GHL Conversations adapter (IG/FB/TikTok/SMS). To add a 
 
 ## Webinar (WebinarKit/Zoom) — ingest
 - Registration + attendance webhooks → spine. Watch % ≥ threshold → warm voice call. SDR Flo owns registration + show-up; the post-webinar closer is the next stage.
+
+## Instagram (organic CTA: comment -> DM -> qualify -> book) — built
+Official Graph API only. See [instagram/README.md](instagram/README.md). Comment keyword router + private DM + brain handoff + spine, shadow-first. Persona is per-niche (Client Zero = Byram's voice).
