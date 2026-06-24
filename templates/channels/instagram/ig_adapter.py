@@ -216,7 +216,7 @@ def normalize_and_dispatch(payload, *, client=None, cfg=None, con=None):
 # ---- webhook server ----
 def make_client():
     return MetaClient(token=env("PAGE_ACCESS_TOKEN"), ig_user_id=env("META_IG_USER_ID"),
-                      version=env("META_GRAPH_VERSION", "v21.0"), app_secret=env("META_APP_SECRET"),
+                      version=env("META_GRAPH_VERSION", "v21.0"), api_base=env("META_API_BASE", "https://graph.instagram.com"), app_secret=env("META_APP_SECRET"),
                       public_reply_live=(not DRAFT_ONLY) and env("IG_PUBLIC_REPLY_ENABLED", "false").lower() in ("1", "true", "yes"),
                       private_reply_live=(not DRAFT_ONLY) and env("IG_PRIVATE_REPLY_ENABLED", "false").lower() in ("1", "true", "yes"),
                       logger=logj)

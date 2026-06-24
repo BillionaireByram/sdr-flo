@@ -19,11 +19,11 @@ import json, os, urllib.request, urllib.error, hmac, hashlib
 
 
 class MetaClient:
-    def __init__(self, *, token, ig_user_id, version="v21.0", app_secret="",
+    def __init__(self, *, token, ig_user_id, version="v21.0", app_secret="", api_base="https://graph.instagram.com",
                  public_reply_live=False, private_reply_live=False, logger=None):
         self.token = token
         self.ig_user_id = ig_user_id
-        self.base = f"https://graph.facebook.com/{version}"
+        self.base = f"{api_base}/{version}"
         self.app_secret = app_secret
         self.public_reply_live = public_reply_live
         self.private_reply_live = private_reply_live
