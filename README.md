@@ -85,6 +85,22 @@ sdr-flo/
 6. Drop in the intelligence layer ([templates/intelligence/](templates/intelligence/)), start in shadow mode.
 7. Dry-run the gauntlet, then go live one channel at a time.
 
+## Canonical + naming contract
+
+**`sdr-flo` is the canonical framework.** Other Flo codebases are implementations that conform to it:
+- **`agent-flo/sales_flo`** (repo `BillionaireByram/agent-flo`) — a clean typed reference implementation of the sales-brain logic. Vendored into [templates/workflows/](templates/workflows/); it conforms to this framework, not the other way around.
+
+Lock these names so agents and humans stop conflating them:
+
+| Name | What it is |
+| --- | --- |
+| **SDR Flo** | THIS framework — the full client-acquisition system (all channels + brain + intelligence + outbound). The umbrella. |
+| **Setter Flo** | The front-line, lead-facing setter (introduces itself as just **"Flo"**). Qualifies + books. |
+| **Sales Flo** | The back-office revenue/intelligence engine (metrics, lead intel, call review). Not lead-facing. |
+| **Agent Flo** | The reusable agent-OS *repo/runtime* template. A delivery vehicle, not a flow. |
+
+Retire the ambiguous term "Sales Flo DM Setter" — that is **Setter Flo**.
+
 ## Non-negotiables
 
 - **Single-tenant, per-client installs.** No multi-tenant build. One seat per client.

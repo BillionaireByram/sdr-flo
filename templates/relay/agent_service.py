@@ -29,9 +29,15 @@ DB          = c("RELAY_DB", "/opt/sdr-flo/agent/state.db")
 LOG         = c("RELAY_LOG", "/opt/sdr-flo/agent/agent.log.jsonl")
 LIVE        = c("RELAY_LIVE", "false").lower() in ("1", "true", "yes")   # dry-run gate
 SOUL        = Path(c("RELAY_SOUL", "/opt/sdr-flo/profile/SOUL.md")).read_text()
-ENABLE_TAG  = c("RELAY_ENABLE_TAG", "ai-dm-start").lower()               # fail-closed gate
+ENABLE_TAG  = c("RELAY_ENABLE_TAG", "ai-dm-start").lower()               # the "on" tag
+# campaign keywords: a lead who OPENS with one of these is self-tagged + engaged even before the
+# CRM tags them (CRM tagging races/misses). Empty = require the tag only. (Lesson: a pure tag gate
+# silently blocks every lead when the CRM workflow isn't reliably tagging them.)
+KEYWORDS    = [k.strip().lower() for k in c("RELAY_KEYWORDS", "").split(",") if k.strip()]
+# Guard tags = INTENTIONAL kill switches ONLY. Do NOT add a tag here that some workflow mass-applies
+# (a noisy "ai off"-style tag will silently mute your whole pipeline). Keep this list curated.
 GUARD_TAGS  = [t.strip().lower() for t in c("RELAY_GUARD_TAGS",
-                "existing-client,manual,dnd,ai off,do-not-contact").split(",")]
+                "existing-client,manual,dnd,do-not-contact").split(",")]
 # reasoning bridge (Codex via ai-flo -z, or a Claude Max CLI bridge on :8787)
 BRIDGE      = c("RELAY_BRIDGE", "http://127.0.0.1:8787/v1/chat/completions")
 MODEL       = c("RELAY_MODEL", "claude-sonnet-4-6")
@@ -83,6 +89,15 @@ def send_reply(contact, text):
         logj({"act": "send", "dry": True, "contact": contact, "text": text}); return
     s, d = ghl("POST", "/conversations/messages",
                {"type": GHL_MSG_TYPE, "contactId": contact, "message": text})
+    # Channel fallback: the same CRM location often holds IG + SMS leads. Sending the wrong
+    # type for a conversation returns 422 and the reply silently never delivers. Fall back.
+    if s in (400, 422):
+        for alt in ("SMS", "Email", "FB"):
+            if alt == GHL_MSG_TYPE: continue
+            s2, _ = ghl("POST", "/conversations/messages",
+                        {"type": alt, "contactId": contact, "message": text})
+            if s2 in (200, 201):
+                logj({"act": "send-fallback", "type": alt, "status": s2, "contact": contact}); s = s2; break
     logj({"act": "send", "status": s, "contact": contact, "text": text})
 
 def add_tags(contact, tags):
@@ -147,8 +162,14 @@ def handle(p):
         logj({"skip": "tag-fetch-failed", "contact": contact}); return {"ok": True, "skipped": "tag-fetch-failed"}
     if any(t in tags for t in GUARD_TAGS):
         logj({"skip": "guard", "contact": contact}); return {"ok": True, "skipped": "guard"}
-    if ENABLE_TAG and ENABLE_TAG not in tags:          # only engage opted-in leads
-        logj({"skip": "not-enabled", "contact": contact, "need": ENABLE_TAG}); return {"ok": True, "skipped": "not-enabled"}
+    if ENABLE_TAG and ENABLE_TAG not in tags:          # not opted-in yet
+        # Keyword-OR-tag: if they OPENED with a campaign keyword, self-tag + engage (don't wait on
+        # the CRM to tag them). Otherwise skip — this is what keeps the bot out of personal DMs.
+        if KEYWORDS and any(k in (text or "").lower() for k in KEYWORDS):
+            add_tags(contact, [ENABLE_TAG]); tags.append(ENABLE_TAG)
+            logj({"selftag": ENABLE_TAG, "contact": contact})
+        else:
+            logj({"skip": "not-keyword-lead", "contact": contact}); return {"ok": True, "skipped": "not-keyword-lead"}
     con = db()
     con.execute("INSERT INTO turns VALUES(?,?,?,?)", (contact, "user", text, time.time())); con.commit()
     hist = [{"role": r, "content": cc} for r, cc in con.execute(

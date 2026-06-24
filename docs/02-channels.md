@@ -49,6 +49,12 @@ One number per client, multiple personas routed by `override_agent_id`. Trigger:
 Registration funnel (WebinarKit/Zoom, Netlify-hosted) → contact + `registered` tag → spine `webinar_registrations`. Attendance webhook → `webinar_attendance_events` with `watch_percent`. Post-webinar routing: watch % ≥ threshold → warm voice call (Retell hot closer); below → SMS/email nurture. The SDR Flo brain owns getting them **registered + shown up**; the post-webinar closer is the next stage.
 
 ## Universal relay rules (every channel)
-- Validate the secret on every inbound. Fail-closed tag gate. Per-contact isolation.
+- Validate the secret on every inbound. **Keyword-OR-tag gate** (below). Per-contact isolation.
 - Strip dashes; never emit internal tool names; suppress empty/degenerate output; retry on bad model output.
 - Dry-run flag before go-live. Mirror every message to the spine (`conversations` + `events`, channel-tagged).
+
+## Hard-won field lessons (baked into the relay template)
+- **Keyword-OR-tag gate, not pure tag.** A pure "only engage tagged leads" gate silently blocks your *entire* pipeline whenever the CRM workflow isn't reliably tagging (wrong trigger, narrow keyword list, tag/webhook race). The relay engages on **enable-tag OR a campaign keyword**, and **self-tags** the lead the moment they open with a keyword. This is what both lets real leads through and keeps the bot out of personal DMs.
+- **Channel send-fallback.** One CRM location commonly holds **IG + SMS** leads (you DM some, you text others). Sending the wrong message `type` for a conversation returns **422** and the reply *silently never delivers*. The relay retries `SMS`/`Email`/`FB` on a 422.
+- **Guard tags = intentional kill switches only.** Never put a tag in the guard list that some workflow mass-applies — a noisy `ai off`-style tag will mute hundreds of real leads with no error. Real kill switches: `do-not-contact` / `manual` / `dnd` / `existing-client` (hard) + remove the enable-tag (soft).
+- **Recovery sweep.** To catch leads missed during a misconfig, sweep the CRM inbox (recent conversations), and for each whose last message is inbound, re-post it through the relay — the gate self-selects keyword leads and the send-fallback delivers. Idempotent (already-answered = last message outbound = skipped).
