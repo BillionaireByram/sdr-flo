@@ -24,7 +24,7 @@
 ### `acquisition_sources` (attribution + performance)
 `source_label`, `period_date`, `total_count`, `engaged_count`, `converted_count`, `closed_count`, `cost_per_source`. First-touch + multi-touch attribution per channel/campaign.
 
-## Pipeline flow
+## Pipeline
 
 ```
 inbound (any channel) → relay → leads (upsert on email/phone dedup) + events + conversations_log

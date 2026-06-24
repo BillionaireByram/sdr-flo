@@ -97,7 +97,7 @@ Lock these names so agents and humans stop conflating them:
 | **SDR Flo** | THIS framework — the full client-acquisition system (all channels + brain + intelligence + outbound). The umbrella. |
 | **Setter Flo** | The front-line, lead-facing setter (introduces itself as just **"Flo"**). Qualifies + books. |
 | **Sales Flo** | The back-office revenue/intelligence engine (metrics, lead intel, call review). Not lead-facing. |
-| **Agent Flo** | The reusable agent-OS *repo/runtime* template. A delivery vehicle, not a flow. |
+| **Agent Flo** | The reusable agent-OS *repo/runtime* template. A delivery vehicle, not a Flo. |
 
 Retire the ambiguous term "Sales Flo DM Setter" — that is **Setter Flo**.
 

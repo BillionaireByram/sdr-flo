@@ -31,7 +31,7 @@ This one adapter serves four channels; only the `type` changes.
 - Body: `{ "type":"IG|FB|TIKTOK|SMS", "contactId":"<id>", "message":"<text>" }` (type is **uppercase**).
 - Chunk messages over ~950 chars; stagger sends 100ms–1s; skip outbound echoes.
 
-**TikTok comment → DM** is a GHL automation (not the relay): comment contains the keyword → tag `*-lead` → public reply ("just sent you a dm") → opener DM → replies flow into Conversations → the inbound webhook above. The relay supplies the copy; GHL fires it.
+**TikTok comment → DM** is a GHL automation (not the relay): comment contains the keyword → tag `*-lead` → public reply ("just sent you a dm") → opener DM → replies land in Conversations → the inbound webhook above. The relay supplies the copy; GHL fires it.
 
 ## SMS (GHL or Twilio)
 GHL SMS uses the adapter above (`type:SMS`). Twilio is the fallback for non-GHL / international: inbound webhook on receive, outbound `POST /Messages`. Compliance: explicit consent/opt-in, US 1 msg/sec, warmup (start ~10/day, ramp to ~150), strip dashes (carriers double-encode).

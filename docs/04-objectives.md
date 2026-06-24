@@ -21,7 +21,7 @@ In the relay/intelligence config, each motion declares:
 - **Lock-in:** sticky booking; 24h + 2h reminders; reschedule/cancel tools; no sales follow-ups to booked leads.
 
 ## Push to a community
-- **Stage 8:** after rapport + situation, drop the **tracked community link** mid-conversation (never on message 1, never the instant they say a keyword). Collect name → phone → email one at a time, then send the link tied to their situation. Optionally deliver a free resource mid-flow as nurture.
+- **Stage 8:** after rapport + situation, drop the **tracked community link** mid-conversation (never on message 1, never the instant they say a keyword). Collect name → phone → email one at a time, then send the link tied to their situation. Optionally deliver a free resource mid-conversation as nurture.
 - **Hit =** the tracked link string appears in an outbound message (`objective_kind: marker`, `objective_marker` = the link slug).
 - Example: Takeoff University (`/urls/l/...`).
 
