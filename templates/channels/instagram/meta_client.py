@@ -12,7 +12,7 @@ Three actions, each gated by a live flag so DRY-RUN composes-but-never-sends:
   - send_dm(recipient_igsid, text)            DM a user who is in an open thread (24h window)
 
 Setup the caller provides (env): META_GRAPH_VERSION, IG_USER_ID (the IG-scoped business id
-that owns the messaging), PAGE_ACCESS_TOKEN (or IG access token per the chosen login flow).
+that owns the messaging), PAGE_ACCESS_TOKEN (or IG access token per the chosen login method).
 Permissions: instagram_basic, instagram_manage_comments, instagram_manage_messages.
 """
 import json, os, urllib.request, urllib.error, hmac, hashlib

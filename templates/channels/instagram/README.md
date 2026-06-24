@@ -4,7 +4,7 @@ The SDR Flo channel adapter for Instagram organic content CTAs. **Official Meta 
 
 > This is a channel **adapter** that feeds the canonical SDR Flo brain + spine. It is NOT a parallel bot. Per-niche persona is config: **Client Zero = Byram's personal IG, so the agent speaks AS Byram**, never "Flo" or any internal name.
 
-## The flow
+## The loop
 ```
 IG comment "FLO"  → comments webhook → keyword router → (public reply) + private DM opener
 lead replies (DM) → messages webhook → SDR Flo brain (SOUL.byram.md, NEPQ) → qualify → book / give value

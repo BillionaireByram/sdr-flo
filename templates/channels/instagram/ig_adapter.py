@@ -2,7 +2,7 @@
 """
 SDR Flo — Instagram comment->DM->qualify->book adapter (official Graph API only).
 
-Flow:
+Loop:
   IG comment "FLO" → keyword router → (public reply) + private DM opener  [as the configured persona]
   lead replies     → SDR Flo brain (Byram-voice SOUL, NEPQ) → qualify → book / give value
   everything       → the spine (leads, conversations, events, acquisition_sources)

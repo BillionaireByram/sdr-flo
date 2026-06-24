@@ -43,6 +43,12 @@ See [docs/01-architecture.md](docs/01-architecture.md).
 
 Native gateway channels (Telegram/Discord/Slack) bind directly. Everything a lead actually uses — **IG, FB, TikTok, SMS, iMessage, email, voice** — comes through an **adapter/relay**: inbound webhook → relay → one-shot reasoning over the brain → reply via the channel's send API. One brain, one lead record, every channel. See [docs/02-channels.md](docs/02-channels.md).
 
+### Instagram organic-content CTA (built)
+IG can run two ways: via **GHL Conversations** (the Takeoff path) or **direct official Meta Graph API** (no GHL). The direct-API channel is built at [templates/channels/instagram/](templates/channels/instagram/): a lead **comments a keyword** (e.g. "FLO") on a post → keyword router → public reply + private DM opener → DM replies route into the brain to qualify + book. **Official Graph API only** — never the unofficial/private API (account-ban risk). Shadow-first, idempotent, suppression-gated, never fakes a booking. This is the reusable social-CTA module every future client gets.
+
+### Persona is per-niche config (not a fork)
+The lead-facing persona is a config layer. Default is **"Flo."** For Client Zero (Byram's personal IG) the persona is **Byram himself** (`SOUL.byram.md`) — same SDR Flo brain + stage machine, different voice. Swap the persona per client/niche; never fork the framework for it.
+
 ## 6. The lead lifecycle (the loop)
 
 ```
@@ -93,4 +99,4 @@ Per-client VM (Proxmox) or pod. One AI Flo engine, an isolated profile per agent
 
 ## 12. Roadmap
 
-Cold outbound engine — framework in [docs/09-outreach.md](docs/09-outreach.md) (deliverability-first, signal-anchored, gift-first, 3-7-7 multichannel, replies → the brain); runtime build next · real-time push · shared fleet dashboard · richer voice provider abstraction.
+Cold outbound engine — framework in [docs/09-outreach.md](docs/09-outreach.md) (deliverability-first, signal-anchored, gift-first, 3-7-7 multichannel, replies → the brain); runtime build next · **Instagram v2** (value-post → gift-for-email/phone with per-post tracked links) · **Chatwoot DM inbox / human-handoff** surface · real-time push · shared fleet dashboard · richer voice provider abstraction.
