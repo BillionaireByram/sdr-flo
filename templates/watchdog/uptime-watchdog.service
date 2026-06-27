@@ -1,0 +1,9 @@
+[Unit]
+Description=SDR Flo uptime watchdog (proactive: spot -> fix -> report; watches every conversation)
+After=network-online.target
+
+[Service]
+Type=oneshot
+# Load the same env the relay uses (brain key, GHL, Slack, secret). Adjust the path per install.
+EnvironmentFile=/opt/sdr-flo/.env
+ExecStart=/usr/bin/python3 /opt/sdr-flo/agent/uptime-watchdog.py

@@ -21,7 +21,7 @@ SDR Flo is configured to ONE primary objective per motion (a client can run seve
 | Motion | Objective | Conversion event | Example |
 | --- | --- | --- | --- |
 | **Book** | Qualify → book a call | Calendar event created | Takeoff BFP, LGH strategy call |
-| **Community** | Nurture → push to a paid/free community | Tracked link sent + joined | Takeoff University, CommunityFlow |
+| **Community** | Nurture → push to a paid/free community | Tracked link sent + joined | a paid community, CommunityFlow |
 | **Sell** | Qualify → sell a low-ticket offer | Checkout link / payment | low-ticket SLO |
 | **Webinar** | Qualify → register + show up to a training | Registration + attendance | LGH workshop |
 
@@ -29,13 +29,15 @@ All motions run the **same NEPQ stage machine**; only the final "close" stage an
 
 ## 4. Architecture — four layers
 
-**Brain** — one Flo across text + voice. Hermes/AI Flo agent (Codex or client Max). NEPQ + Cole Gordon + SPIN stage machine. Per-lead profile, injection-hardened, escalation triggers, self-improving.
+**Brain** — one Flo across text + voice. **Pluggable reasoning backend** (OpenAI-compatible): a dedicated provider API key (GLM `glm-4.6`, recommended — never expires, single-tenant), Codex (`ai-flo -z`), or a client Max bridge. NEPQ + Cole Gordon + SPIN stage machine. Per-lead profile, injection-hardened, escalation triggers, self-improving.
 
 **Spine** — Supabase, the single source of truth: `leads`, `conversations`, `events`, `lead_intel`, `acquisition_sources`. (Names standardized here; existing installs keep `sales_flo_leads` / `setter_flo_conversations` as stable identifiers.)
 
 **Face** — operator dashboard + Twenty CRM as read/work surfaces over the spine.
 
 **Hands** — channel adapters (GHL Conversations, Photon iMessage, Twilio, Gmail), Retell voice, Google Calendar booking.
+
+**Guardian** — a proactive uptime watchdog on the client's own VM (spot → fix → report): heals a downed agent/brain and re-pokes any waiting conversation so no lead is ever left unanswered. See [docs/10-uptime-watchdog.md](docs/10-uptime-watchdog.md).
 
 See [docs/01-architecture.md](docs/01-architecture.md).
 

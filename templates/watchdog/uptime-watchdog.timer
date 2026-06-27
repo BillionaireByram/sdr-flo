@@ -1,0 +1,10 @@
+[Unit]
+Description=Run the SDR Flo uptime watchdog every 2 minutes
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=2min
+AccuracySec=10s
+
+[Install]
+WantedBy=timers.target

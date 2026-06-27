@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.5.0 — 2026-06-27 — Pluggable brain + proactive uptime watchdog (100% uptime)
+Hardened from a live 26h outage: a setter's brain ran on a Claude Max OAuth token **shared across two VMs**; the token rotated, died silently, and every lead got `502` with no one watching. Two upgrades, generalized for every client (no client data replicated):
+- **Pluggable brain** (`templates/relay/agent_service.py`): the reasoning call now takes any OpenAI-compatible endpoint via `RELAY_BRIDGE`/`RELAY_MODEL`/`RELAY_BRAIN_KEY` + `RELAY_BRAIN_MAX_TOKENS`, with a `reasoning_content` fallback. **A dedicated provider API key (e.g. GLM `glm-4.6`) never expires and is single-tenant — the shared-OAuth failure mode is gone.** New default model `glm-4.6` (avoid `glm-5.2` for real-time: reasoning-heavy, empty without huge budgets).
+- **Uptime watchdog** (`templates/watchdog/`): a self-contained systemd timer on the client's VM that is **proactive — spot → fix → report**. Restarts a downed agent, clears brain stalls, and re-pokes any conversation left waiting so the agent answers — then reports *what it saw and fixed*. Only @mentions a human for the rare unfixable (e.g. provider balance). New doc: `docs/10-uptime-watchdog.md`.
+- **Scrubbed** `templates/intelligence/config.example.json` to a generic placeholder (removed a prior client's link slug, rep name, offer figures, and paths).
+
 ## v0.4.0 — 2026-06-24 — Instagram social-CTA channel (comment->DM->qualify->book)
 First social channel adapter, `templates/channels/instagram/` — **official Meta Graph API only** (no unofficial/private API). Lifted the best open-source patterns (InstaAuto comment->DM + Supabase shape, ig-mcp official send paths) into our own brain-owning implementation.
 - Comment "FLO" keyword router -> public reply + private DM opener; DM replies route to the SDR Flo brain (NEPQ) to qualify + book.

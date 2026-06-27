@@ -23,7 +23,7 @@ In the relay/intelligence config, each motion declares:
 ## Push to a community
 - **Stage 8:** after rapport + situation, drop the **tracked community link** mid-conversation (never on message 1, never the instant they say a keyword). Collect name → phone → email one at a time, then send the link tied to their situation. Optionally deliver a free resource mid-conversation as nurture.
 - **Hit =** the tracked link string appears in an outbound message (`objective_kind: marker`, `objective_marker` = the link slug).
-- Example: Takeoff University (`/urls/l/...`).
+- Example: a tracked community link (`/urls/l/...`).
 
 ## Sell a low-ticket offer
 - **Stage 8:** qualify for fit → present the offer tied to their problem → handle price/timing objections → send the **checkout link**. Keep it conversational; the close is the link + a nudge.

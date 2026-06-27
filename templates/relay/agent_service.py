@@ -38,9 +38,15 @@ KEYWORDS    = [k.strip().lower() for k in c("RELAY_KEYWORDS", "").split(",") if 
 # (a noisy "ai off"-style tag will silently mute your whole pipeline). Keep this list curated.
 GUARD_TAGS  = [t.strip().lower() for t in c("RELAY_GUARD_TAGS",
                 "existing-client,manual,dnd,do-not-contact").split(",")]
-# reasoning bridge (Codex via ai-flo -z, or a Claude Max CLI bridge on :8787)
-BRIDGE      = c("RELAY_BRIDGE", "http://127.0.0.1:8787/v1/chat/completions")
-MODEL       = c("RELAY_MODEL", "claude-sonnet-4-6")
+# ---- reasoning backend (pluggable, OpenAI-compatible) ----
+# Point at ANY OpenAI-compatible endpoint: a dedicated provider API (GLM via api.z.ai, OpenRouter),
+# a Codex (ai-flo -z) bridge, or a local Claude Max CLI bridge on :8787.
+# LESSON (Takeoff outage): an OAuth token shared across machines rotates and DIES silently. A dedicated
+# provider API KEY never expires and is single-tenant per client -> the most stable brain. Prefer it.
+BRIDGE       = c("RELAY_BRIDGE", "http://127.0.0.1:8787/v1/chat/completions")
+MODEL        = c("RELAY_MODEL", "glm-4.6")
+BRAIN_KEY    = c("RELAY_BRAIN_KEY") or c("GLM_API_KEY") or "x"   # provider key; "x" for a no-auth local bridge
+BRAIN_MAXTOK = int(c("RELAY_BRAIN_MAX_TOKENS", "1024"))
 # channel send (GHL Conversations example)
 GHL_API     = "https://services.leadconnectorhq.com"
 GHL_PIT     = c("GHL_PIT")
@@ -130,10 +136,12 @@ def think(hist, inbound, profile):
         content = ""
         try:
             req = urllib.request.Request(BRIDGE, data=json.dumps(
-                {"model": MODEL, "messages": msgs, "temperature": 0.5}).encode(),
-                headers={"Content-Type": "application/json", "Authorization": "Bearer x"}, method="POST")
+                {"model": MODEL, "messages": msgs, "temperature": 0.5, "max_tokens": BRAIN_MAXTOK}).encode(),
+                headers={"Content-Type": "application/json", "Authorization": f"Bearer {BRAIN_KEY}"}, method="POST")
             with urllib.request.urlopen(req, timeout=120) as r:
-                content = (json.loads(r.read().decode())["choices"][0]["message"]["content"] or "").strip()
+                _m = json.loads(r.read().decode())["choices"][0]["message"]
+                # reasoning models (e.g. glm-5.2) may put text in reasoning_content; prefer content
+                content = ((_m.get("content") or _m.get("reasoning_content") or "")).strip()
         except Exception as e:
             logj({"error": "think", "detail": str(e)[:160]})
         if not content: continue

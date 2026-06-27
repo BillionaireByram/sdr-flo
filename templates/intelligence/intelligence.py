@@ -51,7 +51,7 @@ def log(o):
 
 
 def llm(messages, max_tokens=2200, temp=0.3):
-    """Reasoning call. Takeoff routes through the local Max bridge (no API credits).
+    """Reasoning call. Routes through the configured reasoning backend (a dedicated provider key like GLM, Codex, or a local CLI bridge).
     Framework note: per-client this points at that client's provider/bridge."""
     body = {"model": CFG["model"], "messages": messages, "temperature": temp, "max_tokens": max_tokens}
     req = urllib.request.Request(CFG["bridge"], data=json.dumps(body).encode(),

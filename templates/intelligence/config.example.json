@@ -1,58 +1,58 @@
 {
-  "client": "takeoff-financial",
-  "display_name": "Takeoff Financial",
-  "state_db": "/opt/takeoff-financial/agent/state.db",
-  "log": "/opt/takeoff-financial/agent/agent.log.jsonl",
-  "bridge": "http://127.0.0.1:8787/v1/chat/completions",
-  "model": "claude-sonnet-4-6",
-  "service": "takeoff-setter-agent",
-  "vault_reports": "/root/.claude/shared-memory/wiki/clients/takeoff-financial/intelligence",
+  "client": "client-slug",
+  "display_name": "Client Name",
+  "state_db": "/opt/sdr-flo/agent/state.db",
+  "log": "/opt/sdr-flo/agent/agent.log.jsonl",
+  "bridge": "https://api.z.ai/api/coding/paas/v4/chat/completions",
+  "model": "glm-4.6",
+  "service": "sdr-flo-relay",
+  "vault_reports": "/root/.claude/shared-memory/wiki/clients/CLIENT_SLUG/intelligence",
   "keep_versions": 30,
   "targets": { "hit_rate": 0.30 },
   "min_convos": { "daily": 4, "weekly": 12 },
   "max_transcripts_to_llm": 30,
   "motions": {
-    "TU": {
-      "soul": "/root/.hermes/profiles/takeoff-financial-os/SOUL.md",
-      "objective_label": "get them the Takeoff University link (push to the community)",
+    "COMMUNITY": {
+      "soul": "/opt/sdr-flo/profile/SOUL.md",
+      "objective_label": "send them the community link (push to the paid/free community)",
       "outcome_name": "link sent",
-      "objective_marker": "jDDhgB6lq",
+      "objective_marker": "YOUR_TRACKED_LINK_SLUG",
       "objective_kind": "marker",
-      "protected": ["jDDhgB6lq", "$25,000 to $50,000", "## CONTINUITY", "## DESTINATION", "Marvin", "Takeoff University"]
+      "protected": ["## CONTINUITY", "## DESTINATION", "<YOUR_OFFER_ANCHOR>", "<YOUR_REP_NAME>", "<YOUR_PRODUCT_NAME>"]
     },
-    "BFP": {
-      "soul": "/root/.hermes/profiles/takeoff-financial-os/SOUL_BFP.md",
-      "objective_label": "book the funding consultation call",
+    "BOOK": {
+      "soul": "/opt/sdr-flo/profile/SOUL_BOOK.md",
+      "objective_label": "book the consultation call",
       "outcome_name": "call booked",
       "objective_marker": "__BOOKED__",
       "objective_kind": "book",
-      "protected": ["700", "Marvin", "calendar"]
+      "protected": ["<YOUR_QUALIFY_THRESHOLD>", "<YOUR_REP_NAME>", "calendar"]
     }
   },
   "gauntlet": {
-    "TU": [
+    "COMMUNITY": [
       {"name": "continuity_no_restart",
-       "history": [["assistant","Nice to meet you Mark. What is the best number to reach you at?"],["user","5164458988"]],
-       "user": "my email is mark@gmail.com",
+       "history": [["assistant","Nice to meet you. What is the best number to reach you at?"],["user","5551234567"]],
+       "user": "my email is lead@example.com",
        "fail_if": ["you reached out","what's good","what is good","point you in the right direction","were you looking for help"],
-       "pass_if": ["link","jddhgb6lq","email","takeoff university"]},
+       "pass_if": ["link","your_tracked_link_slug","email","<your_product_name>"]},
       {"name": "drive_to_objective",
-       "history": [["user","yeah I want funding for my trucking business"],["assistant","Got it. Are you trying to get approved now or get your profile ready first?"],["user","get it ready first I guess"]],
+       "history": [["user","yeah I am interested in what you offer"],["assistant","Got it. Are you ready to move now or want to learn more first?"],["user","learn more first I guess"]],
        "user": "ok yeah that makes sense",
        "fail_if": ["you reached out"],
-       "pass_if": ["link","takeoff university","jddhgb6lq","name","full name"]},
+       "pass_if": ["link","<your_product_name>","name","full name"]},
       {"name": "no_dashes",
        "history": [],
        "user": "what do you guys actually do",
        "fail_if": [" - ","—","–"],
        "pass_if": []}
     ],
-    "BFP": [
+    "BOOK": [
       {"name": "qualify_progress",
        "history": [["user","yes im interested"]],
-       "user": "my credit is around 720",
+       "user": "here is my situation <qualifying detail>",
        "fail_if": ["you reached out","what's good"],
-       "pass_if": ["revenue","business","month","funding","use"]},
+       "pass_if": ["<qualifier_1>","<qualifier_2>","<qualifier_3>"]},
       {"name": "no_dashes",
        "history": [],
        "user": "how does this work",
