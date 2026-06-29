@@ -42,6 +42,9 @@ MENTION   = c("WATCHDOG_ESCALATE_MENTION")          # slack user id, only for UN
 # tuning
 STUCK_MIN = int(c("WATCHDOG_STUCK_MIN", "4")); MAX_AGE_MIN = int(c("WATCHDOG_MAX_AGE_MIN", "720"))
 MAX_PER_RUN = int(c("WATCHDOG_MAX_PER_RUN", "8"))
+# Quiet by default: only post to Slack for issues that need a human. Set WATCHDOG_VERBOSE=1 to also
+# announce auto-fixes/recoveries + a weekly heartbeat. Either way everything is recorded in WLOG.
+VERBOSE = c("WATCHDOG_VERBOSE", "0").lower() in ("1", "true", "yes")
 STATE = c("WATCHDOG_STATE", "/opt/sdr-flo/agent/uptime_watchdog_state.json")
 WLOG  = c("WATCHDOG_LOG", "/opt/sdr-flo/agent/uptime_watchdog.log.jsonl")
 LOCK  = "/tmp/sdr_flo_uptime_watchdog.lock"
@@ -151,17 +154,19 @@ def main():
             except Exception: pass
             time.sleep(0.4)
 
-        # report — proactive: what I saw + what I fixed
-        if fixes:
+        # report — QUIET BY DEFAULT: fixes + recoveries happen silently (logged below, never Slack).
+        # Slack is reserved for the one thing that genuinely needs a human, so the channel stays clean
+        # and uptime is guaranteed behind the scenes. Set WATCHDOG_VERBOSE=1 to also announce fixes/recoveries.
+        if VERBOSE and fixes:
             slack(":wrench: *Uptime watchdog* — caught and fixed automatically:\n" + "\n".join("• " + f for f in fixes) + "\nBack to normal, nothing needed on your end.")
-        if recovered:
+        if VERBOSE and recovered:
             slack(f":zap: *Uptime watchdog* — found {len(recovered)} conversation(s) waiting and made sure they got answered. All set.")
-        if unfixable:
+        if unfixable:                                    # always alert — this is the only thing that needs a human
             who = f"<@{MENTION}> " if MENTION else ""
             slack(f"{who}:warning: *Uptime watchdog* — I spotted this and tried to fix it, but it needs a human:\n" + "\n".join("• " + u for u in unfixable))
 
         cur = "unhealthy" if unfixable else "healthy"
-        if cur == "healthy" and now - state.get("last_heartbeat", 0) > 604800:
+        if VERBOSE and cur == "healthy" and now - state.get("last_heartbeat", 0) > 604800:
             slack(":green_heart: *Weekly uptime check* — brain healthy, agent up, watching every conversation around the clock. 100% uptime.")
             state["last_heartbeat"] = now
         state.update(status=cur, handled=list(handled)[-1500:], last_run=now)

@@ -21,8 +21,10 @@ Pair it with a **dedicated provider API key** for the brain (e.g. GLM via `api.z
 ## Config
 All via env — see [`../deploy/env.example`](../deploy/env.example) (`WATCHDOG_*`, `RELAY_BRAIN_*`, `GHL_LOC`). Nothing is hardcoded; no secrets live in the script.
 
-## Alert channel
-Point `SLACK_OPS_CHANNEL` at wherever the team already watches. Wording is intentionally calm and client-safe (it reports fixes and recoveries, not raw stack traces), so it's fine in a shared channel — it turns an incident into a visible *"caught it, fixed it"* trust signal.
+## Alert channel — quiet by default
+The watchdog is **silent by default**: it fixes and recovers behind the scenes (everything is recorded in `WATCHDOG_LOG`), and only posts to `SLACK_OPS_CHANNEL` for the one thing that genuinely needs a human (an unfixable issue, e.g. a provider balance limit) — `@`-mentioning `WATCHDOG_ESCALATE_MENTION`. This keeps the channel clean while uptime is guaranteed underneath.
+
+Set `WATCHDOG_VERBOSE=1` if you instead want it to announce every auto-fix and recovery plus a weekly heartbeat (useful in a dedicated internal ops channel, or to show a client a visible *"caught it, fixed it"* trust signal). Wording stays calm and client-safe either way — never raw stack traces.
 
 ## Tuning
 - `WATCHDOG_STUCK_MIN` (default 4) — how long a lead may wait before a re-poke.
