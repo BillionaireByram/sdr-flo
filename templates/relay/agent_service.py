@@ -115,9 +115,48 @@ def escalate(contact, reason):
     add_tags(contact, ["ai-escalated"])
     # TODO: alert the operator (Slack/Telegram/iMessage)
 
+# ---- structured-payload guard (NEVER leak raw model JSON to a lead) ----
+# Field lesson: when the model emits malformed/fenced JSON, a naive fallback can send the whole
+# {"reply":...,"actions":...,"profile":...} blob straight to the lead. Extract the real reply, and
+# if it STILL looks structured, block the send entirely (clean_text returns "" -> send_reply skips).
+def _looks_structured_payload(t):
+    if not isinstance(t, str): return False
+    probe = t.strip()
+    if not probe: return False
+    if probe[0] in "[{": return True
+    lowered = probe.lower()
+    return any(m in lowered for m in ('"reply"', "'reply'", '"actions"', "'actions'",
+                                      '"profile"', "'profile'", '"contact_info"', "'contact_info'"))
+
+def _extract_reply_from_structured(value, depth=0):
+    if depth > 4 or value is None: return ""
+    if isinstance(value, dict): return _extract_reply_from_structured(value.get("reply", ""), depth + 1)
+    if not isinstance(value, str): return str(value).strip() if value else ""
+    text = value.strip()
+    if not text: return ""
+    fenced = re.match(r"^```(?:json)?\s*(.*?)\s*```$", text, re.S | re.I)
+    if fenced: text = fenced.group(1).strip()
+    try:
+        parsed = json.loads(text)
+        if isinstance(parsed, dict) and "reply" in parsed: return _extract_reply_from_structured(parsed.get("reply", ""), depth + 1)
+        if isinstance(parsed, str): return _extract_reply_from_structured(parsed, depth + 1)
+        return ""
+    except Exception: pass
+    m = re.search(r"\{.*\}", text, re.S)
+    if m:
+        try:
+            parsed = json.loads(m.group(0))
+            if isinstance(parsed, dict) and "reply" in parsed: return _extract_reply_from_structured(parsed.get("reply", ""), depth + 1)
+        except Exception: pass
+    return text
+
 # ---- output hygiene ----
 def clean_text(t):
     if not t: return t
+    t = _extract_reply_from_structured(t)
+    if _looks_structured_payload(t):
+        logj({"error": "blocked-structured-reply", "preview": str(t)[:160]})
+        return ""
     urls = re.findall(r"https?://\S+", t)
     for k, u in enumerate(urls): t = t.replace(u, "\x00%d\x00" % k)
     t = t.replace("—", ", ").replace("–", ", ")
