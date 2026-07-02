@@ -3,7 +3,9 @@
 Per-client, single-tenant. One AI Flo engine per VM, an isolated profile per agent, systemd for lifecycle, Codex or client Max for reasoning (**zero API credits**).
 
 ## The engine
-AI Flo v3 = DigitalFlo's fork of Nous Hermes Agent (MIT), client-facing name **"AI Flo" / "the v3 agent"** (never "Hermes"). Installed at `/opt/ai-flo-v3` (path may be versioned, e.g. `/opt/<client>-v3-vX.Y.Z`). Gateway: `python -m hermes_cli.main gateway run --replace`. Customize via `skills/`, `plugins/`, `SOUL.md`, `config.yaml`, `.env` — never fork engine source unless required (every engine patch is a rebase cost). See the engine repo's `README.DIGITALFLO.md`.
+AI Flo v3 = DigitalFlo's fork of Nous Hermes Agent (MIT), client-facing name **"AI Flo" / "the v3 agent"** (never "Hermes").
+
+> **FLO V4 (2026-07-01):** the engine fork is now the **v4 line** (Hermes 0.18 base) and ships `flo-core/` — the versioned framework layer. New installs compose the profile home with `flo-core/bin/flo-compose` (CORE + `sdr` profile + niche + client.yaml) instead of hand-writing SOUL/config/skills; this repo's templates (relay, channels, intelligence, watchdog, deploy) remain the canonical deterministic layer the `sdr` profile installs. Runbook: engine repo `flo-core/docs/ONBOARDING.md`. Installed at `/opt/ai-flo-v3` (path may be versioned, e.g. `/opt/<client>-v3-vX.Y.Z`). Gateway: `python -m hermes_cli.main gateway run --replace`. Customize via `skills/`, `plugins/`, `SOUL.md`, `config.yaml`, `.env` — never fork engine source unless required (every engine patch is a rebase cost). See the engine repo's `README.DIGITALFLO.md`.
 
 ## Profiles & isolation
 Each agent gets a separate **`HERMES_HOME`** with its own `SOUL.md`, `skills/`, `config.yaml`, `.env`, sessions, state. Multiple agents share one engine binary but never share memory — "separate profile so conversations don't mix" is a hard-won rule. A **new setter** = a new profile home + its own service (and, for non-native channels, its own relay on its own port). Adding one:
