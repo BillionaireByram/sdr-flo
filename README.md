@@ -87,19 +87,20 @@ sdr-flo/
 
 ## Canonical + naming contract
 
-**`sdr-flo` is the canonical framework.** Other Flo codebases are implementations that conform to it:
-- **`agent-flo/sales_flo`** (repo `BillionaireByram/agent-flo`) — a clean typed reference implementation of the sales-brain logic. Vendored into [templates/workflows/](templates/workflows/); it conforms to this framework, not the other way around.
+**`sdr-flo` is the canonical internal acquisition framework inside FLO’s Sales Flo department.** Other codebases are implementations that conform to it:
+- **`agent-flo/sales_flo`** (repo `BillionaireByram/flo-agent`) — a clean typed reference implementation of the sales-brain logic. Vendored into [templates/workflows/](templates/workflows/); it conforms to this framework, not the other way around.
 
-Lock these names so agents and humans stop conflating them:
+The full product map is in [FLO Core Taxonomy](FLO_CORE_TAXONOMY.md): **DigitalFlo sells FLO**; a client scope is Sales, Growth, Ops, or Tech.
 
-| Name | What it is |
+| Name | Canonical treatment |
 | --- | --- |
-| **SDR Flo** | THIS framework — the full client-acquisition system (all channels + brain + intelligence + outbound). The umbrella. |
-| **Setter Flo** | The front-line, lead-facing setter (introduces itself as just **"Flo"**). Qualifies + books. |
-| **Sales Flo** | The back-office revenue/intelligence engine (metrics, lead intel, call review). Not lead-facing. |
-| **Agent Flo** | The reusable agent-OS *repo/runtime* template. A delivery vehicle, not a Flo. |
+| **Sales Flo** | The client-explainable FLO department for acquisition and pipeline movement. This repository lives inside it. |
+| **SDR Flo** | THIS internal framework: the full client-acquisition system (all channels + brain + intelligence + outbound). |
+| **Setter Flo** | Internal front-line lead-conversation function. A lead sees only the configured persona. |
+| **Sales Flo intelligence** | Internal back-office revenue/intelligence function: metrics, lead intel, call review, and pipeline reporting. |
+| **Agent Flo / AI Flo** | Internal repository/runtime aliases; never separate client products. |
 
-Retire the ambiguous term "Sales Flo DM Setter" — that is **Setter Flo**.
+Retire the ambiguous term "Sales Flo DM Setter." In product language use **Sales Flo**; in technical documentation use **Setter Flo** only when precision matters.
 
 ## Non-negotiables
 
