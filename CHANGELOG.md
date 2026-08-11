@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.6.0 — 2026-08-11 — Nightly sales-call audit intelligence
+- Added an evidence-backed transcript audit contract with strict validation and timestamped quote requirements.
+- Added deterministic JSON + Markdown reports for three distinct jobs: Marketing message correction, Sales Manager coaching, and Owner unfiltered operating truth.
+- Added portable CLI, client configuration reference, privacy/routing doctrine, rollout guidance, and automated tests.
+
 ## v0.5.0 — 2026-06-27 — Pluggable brain + proactive uptime watchdog (100% uptime)
 Hardened from a live 26h outage: a setter's brain ran on a Claude Max OAuth token **shared across two VMs**; the token rotated, died silently, and every lead got `502` with no one watching. Two upgrades, generalized for every client (no client data replicated):
 - **Pluggable brain** (`templates/relay/agent_service.py`): the reasoning call now takes any OpenAI-compatible endpoint via `RELAY_BRIDGE`/`RELAY_MODEL`/`RELAY_BRAIN_KEY` + `RELAY_BRAIN_MAX_TOKENS`, with a `reasoning_content` fallback. **A dedicated provider API key (e.g. GLM `glm-4.6`) never expires and is single-tenant — the shared-OAuth failure mode is gone.** New default model `glm-4.6` (avoid `glm-5.2` for real-time: reasoning-heavy, empty without huge budgets).

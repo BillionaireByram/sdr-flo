@@ -71,6 +71,7 @@ See [docs/03-the-brain.md](docs/03-the-brain.md) and [docs/04-objectives.md](doc
 ## 7. Intelligence — scoreboard + self-optimization
 
 - **Scoreboard** tallies every conversation + action, scores objective hits, writes a plain-English daily snapshot + weekly report. This is the metric the optimizer reads.
+- **Nightly call audit** reviews each completed recorded sales call once and produces three least-privilege reports: Marketing gets upstream message/expectation fixes, the Sales Manager gets rep coaching and training actions, and the Owner gets the raw unfiltered operating view. This is a reusable client module for any approved transcript source.
 - **Optimizer** (champion/challenger, eval-gated): only promotes a new prompt if it beats the live one on a fixed gauntlet, keeps a protected core verbatim, stays in size bounds, and regresses nothing. Versioned + auto-rollback. Materiality-gated (evolve only when needed). Fail-safe (bridge down → no change). Ships in shadow mode; flip one flag to go live.
 
 See [docs/05-intelligence.md](docs/05-intelligence.md).

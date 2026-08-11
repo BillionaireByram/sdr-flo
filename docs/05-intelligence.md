@@ -4,6 +4,8 @@ Every SDR Flo install ships with the intelligence layer: a **scoreboard** that m
 
 ## Two jobs, one engine, shared metrics
 
+The conversation scoreboard remains the objective-hit source of truth. For recorded sales calls, the complementary [nightly call-audit module](11-call-audit.md) audits each completed call once and routes separate findings to Marketing, the Sales Manager, and the Owner.
+
 ### Scoreboard (the measuring stick)
 Tallies every conversation + action from the relay's store (per-contact turns + the action log), scores **objective hits** per motion (link sent / call booked / sold / registered), and writes a **plain-English** report:
 - People talked to · real conversations (they replied) · objective hits + % · escalations · auto-handled hiccups.
