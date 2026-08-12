@@ -45,6 +45,7 @@ It is not a chatbot. It is an operator that runs a lead from first touch to obje
 
 Every install ships with the **scoreboard + self-optimizer**:
 - **Scoreboard** tallies every conversation + action, scores objective hits, writes a plain-English daily/weekly report.
+- **Nightly call audit** reviews every completed sales call once, then creates separate evidence-backed reports for Marketing, the Sales Manager, and the Owner so each role gets the fixes it can act on without receiving unnecessary raw detail.
 - **Optimizer** reads the scoreboard, analyzes real transcripts, and — only when a challenger *measurably beats* the live prompt on a fixed test, without touching a protected core — promotes a better prompt. Versioned, auto-rollback, forward-only, evolve-only-when-needed.
 
 See [docs/05-intelligence.md](docs/05-intelligence.md). Engine in [templates/intelligence/](templates/intelligence/).
@@ -64,7 +65,8 @@ sdr-flo/
 │   ├── 06-backend-data.md     ← Supabase spine, Twenty CRM, the data model
 │   ├── 07-deployment.md       ← VM, systemd, auth (no API credits), per-client install
 │   ├── 08-training-hermes.md  ← author SOUL/skills, train in-channel
-│   └── 09-outreach.md         ← cold outbound: deliverability, signals, copy, cadence
+│   ├── 09-outreach.md         ← cold outbound: deliverability, signals, copy, cadence
+│   └── 11-call-audit.md        ← nightly call audits + three role-specific reports
 ├── templates/
 │   ├── relay/                 ← the channel relay (capture → reason → reply)
 │   ├── intelligence/          ← scoreboard + optimizer engine + config

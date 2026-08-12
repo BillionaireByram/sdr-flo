@@ -1,0 +1,31 @@
+{
+  "timezone": "America/New_York",
+  "run_at": "00:30",
+  "source": {
+    "provider": "client-approved-transcript-adapter",
+    "recording_consent_required": true
+  },
+  "audit": {
+    "score_dimensions": [
+      "discovery",
+      "problem_depth",
+      "qualification",
+      "objection_handling",
+      "close"
+    ],
+    "require_timestamped_evidence": true,
+    "minimum_calls_for_trend": 5
+  },
+  "reports": {
+    "output_root": "/var/lib/sdr-flo/call-reports",
+    "state_dir": "/var/lib/sdr-flo/call-audit-state",
+    "marketing_destination": "disabled-until-approved",
+    "sales_manager_destination": "disabled-until-approved",
+    "owner_destination": "disabled-until-approved"
+  },
+  "retention": {
+    "raw_transcripts_days": 30,
+    "audit_records_days": 365,
+    "reports_days": 365
+  }
+}
