@@ -22,6 +22,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from access_grant import consume_grant
+from copy_config import load_client_copy
 from ghl_calendar import CalendarReceiptError, appointment_body, free_slots_path, parse_free_slots
 from ghl_poll import fetch_inbound
 from turn_engine import booking_instructions, fresh_state, run_turn
@@ -231,9 +232,16 @@ def _csv(name):
     return tuple(item.strip() for item in c(name, "").split(",") if item.strip())
 
 
+def _client_copy():
+    return load_client_copy(c("RELAY_COPY_FILE"))
+
+
 def _required_fields():
     raw = _csv("RELAY_REQUIRED_FIELDS")
-    return raw or ("project", "location", "timeline", "intent")
+    if raw:
+        return raw
+    required = _client_copy().get("required") or []
+    return tuple(required) or ("project", "location", "timeline", "intent")
 
 
 def _load_engine(con, contact):
@@ -366,10 +374,11 @@ def handle(p):
         slots_fn=slots_fn,
         book_fn=book_fn,
         required=_required_fields(),
-        in_area=_csv("RELAY_IN_AREA"),
-        out_of_area=_csv("RELAY_OUT_OF_AREA"),
+        in_area=_csv("RELAY_IN_AREA") or tuple(_client_copy().get("in_area") or []),
+        out_of_area=_csv("RELAY_OUT_OF_AREA") or tuple(_client_copy().get("out_of_area") or []),
         tools_enabled=tools_enabled,
         appointment_request=request_for,
+        templates=_client_copy(),
     )
     _save_engine(con, contact, state)
     for action in (captured.get("out") or {}).get("actions") or []:
@@ -415,15 +424,24 @@ def accept_opt_in(p):
     gate = accept_public(p, "opt-in")
     if not gate.get("ok"):
         return gate
-    p = dict(p)
-    p["consented"] = True
-    p.setdefault("contactId", c("RELAY_CONTACT_ID"))
-    p.setdefault("phone", c("RELAY_ALLOWED_PHONE"))
-    p.setdefault("text", "I opted in and want to talk about the project.")
-    p.setdefault("messageId", "relay-opt-in")
-    result = handle(p)
-    result["httpStatus"] = 200
-    return result
+    copy = _client_copy()
+    opener = str(copy.get("opener") or "").strip()
+    if "?" not in opener:
+        return {"ok": False, "httpStatus": 503, "sent": False, "message": "The opener does not invite a reply. Nothing was sent."}
+    contact = c("RELAY_CONTACT_ID") or pick(p, ["contactId", "contact_id"])
+    if not contact:
+        return {"ok": False, "httpStatus": 503, "sent": False, "message": "The relay has no contact. Nothing was sent."}
+    con = db()
+    state = _load_engine(con, contact)
+    state["consented"] = True
+    if not state.get("consented_at"):
+        state["consented_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    state["stage"] = "awaiting_reply"
+    _save_engine(con, contact, state)
+    send_reply(contact, opener)
+    con.execute("INSERT INTO turns VALUES(?,?,?,?)", (contact, "assistant", opener, time.time()))
+    con.commit()
+    return {"ok": True, "httpStatus": 200, "sent": True, "reply": opener, "booked": False}
 
 
 def accept_pull(p):

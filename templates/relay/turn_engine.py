@@ -10,6 +10,7 @@ import copy
 import re
 from typing import Callable
 
+from copy_config import GENERIC, render_template
 from ghl_calendar import CalendarReceiptError, require_appointment_receipt
 
 
@@ -84,6 +85,7 @@ def run_turn(
     out_of_area: tuple[str, ...] = (),
     tools_enabled: bool = True,
     appointment_request: Callable[[str], dict] | None = None,
+    templates: dict | None = None,
 ) -> tuple[dict, dict]:
     current = copy.deepcopy(state or fresh_state())
     event_id = (event_id or "").strip()
@@ -93,6 +95,10 @@ def run_turn(
     if current.get("stage") == "opted_out" or is_opt_out(text):
         return _opt_out(current, event_id)
 
+    templates = _templates(templates)
+    if current.get("stage") == "booked" and text.strip():
+        _mark(current, event_id, sent=True)
+        return current, _effect(send=True, reply=templates["followup"])
     if current.get("stage") in ("booked", "handoff"):
         _mark(current, event_id, sent=False)
         return current, _effect(send=False)
@@ -116,21 +122,24 @@ def run_turn(
         reply = reply or "Which location should I use?"
 
     missing = missing_required(current["profile"], required)
+    if missing and (not tool or tool["tool"] != "book"):
+        tool = None
+        reply = _question(templates, missing[0])
     if tool and tool["tool"] == "book":
-        return _book(current, event_id, text, reply, tool, missing, slots_fn, book_fn, appointment_request)
+        return _book(current, event_id, text, reply, tool, missing, slots_fn, book_fn, appointment_request, templates)
     if tool and tool["tool"] == "offer_slots":
-        return _offer(current, event_id, reply, missing, slots_fn)
+        return _offer(current, event_id, reply, missing, slots_fn, templates)
 
     _mark(current, event_id, sent=bool(reply))
     return current, _effect(send=bool(reply), reply=reply or None)
 
 
-def _book(current, event_id, text, reply, tool, missing, slots_fn, book_fn, appointment_request):
+def _book(current, event_id, text, reply, tool, missing, slots_fn, book_fn, appointment_request, templates):
     chosen = match_slot(text, list(current.get("offered") or []))
     requested = str(tool.get("slot") or "").strip()
     if missing:
         _mark(current, event_id, sent=True)
-        return current, _effect(send=True, reply=reply or f"I still need {missing[0]} before I can book.")
+        return current, _effect(send=True, reply=reply or _question(templates, missing[0]))
     if not chosen or (requested and requested != chosen):
         _mark(current, event_id, sent=True)
         message = "Reply with the number of one offered time." if not chosen else "That time was not one of the open slots I offered."
@@ -158,13 +167,16 @@ def _book(current, event_id, text, reply, tool, missing, slots_fn, book_fn, appo
     current["stage"] = "booked"
     current["offered"] = []
     _mark(current, event_id, sent=True)
-    return current, _effect(send=True, reply=f"Booked {chosen}. Appointment {appointment_id}.", booked=True, appointment_id=appointment_id)
+    confirmation = render_template(templates["confirmation"], slot=chosen, appointment_id=appointment_id)
+    if appointment_id not in confirmation:
+        return current, _effect(send=True, reply="I could not confirm the booking with the calendar. A person will take it from here.", handoff=True)
+    return current, _effect(send=True, reply=confirmation, booked=True, appointment_id=appointment_id)
 
 
-def _offer(current, event_id, reply, missing, slots_fn):
+def _offer(current, event_id, reply, missing, slots_fn, templates):
     if missing:
         _mark(current, event_id, sent=True)
-        return current, _effect(send=True, reply=reply or f"What is the {missing[0]}?")
+        return current, _effect(send=True, reply=reply or _question(templates, missing[0]))
     try:
         slots = list(slots_fn() or [])[:3]
     except CalendarReceiptError:
@@ -179,7 +191,7 @@ def _offer(current, event_id, reply, missing, slots_fn):
     current["stage"] = "offering"
     listing = " ".join(f"{index + 1}) {slot}" for index, slot in enumerate(slots))
     _mark(current, event_id, sent=True)
-    return current, _effect(send=True, reply=f"Here are the open times. Reply with a number. {listing}")
+    return current, _effect(send=True, reply=render_template(templates["slot_offer"], slots=listing))
 
 
 def _opt_out(current, event_id):
@@ -233,6 +245,26 @@ def _area(text: str, profile: dict, in_area: tuple[str, ...], out_of_area: tuple
     if inside and not hit_in:
         return "unclear" if not str(profile.get("location") or "").strip() else "out"
     return "ok"
+
+
+def _templates(raw: dict | None) -> dict:
+    templates = {
+        "slot_offer": GENERIC["slot_offer"],
+        "confirmation": GENERIC["confirmation"],
+        "followup": GENERIC["followup"],
+        "questions": dict(GENERIC["questions"]),
+    }
+    if isinstance(raw, dict):
+        for key in ("slot_offer", "confirmation", "followup"):
+            if isinstance(raw.get(key), str) and raw[key].strip():
+                templates[key] = raw[key].strip()
+        if isinstance(raw.get("questions"), dict):
+            templates["questions"].update({key: value for key, value in raw["questions"].items() if isinstance(value, str) and value.strip()})
+    return templates
+
+
+def _question(templates: dict, field: str) -> str:
+    return templates["questions"].get(field) or f"What is the {field}?"
 
 
 def _effect(**kwargs) -> dict:

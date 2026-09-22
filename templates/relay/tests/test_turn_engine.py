@@ -90,11 +90,11 @@ class TurnCycleTests(unittest.TestCase):
             return effect
 
         first = step("m1", "I want a putting green")
-        self.assertIn("location", first["reply"])
+        self.assertIn("city", first["reply"])
         self.assertFalse(books)
 
         second = step("m2", "The property is in fort example")
-        self.assertIn("timeline", second["reply"])
+        self.assertIn("visit", second["reply"])
 
         third = step("m3", "this month and I want an estimate")
         self.assertIn("1) " + SLOTS[0], third["reply"])

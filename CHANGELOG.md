@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.7.3 — 2026-09-22 — Client copy on the relay send path
+- Opt-in sends the configured opener. It does not invent an inbound lead message.
+- Slot offer, booking confirmation, follow-up, and qualification questions come from a client file. Defaults stay generic.
+- A private CLI writes one short-lived access code to a file and does not print it.
+
 ## v0.7.2 — 2026-09-22 — Relay-owned demo access and GHL pull
 - `/opt-in` and `/pull` check a signed, single-use access code on the relay. Provider calls stay off unless the relay is live.
 - GHL conversation reads live in the relay, not in the public app.
