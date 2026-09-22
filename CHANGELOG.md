@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.7.1 — 2026-09-22 — Persistent relay inbound
+- The relay HTTP server keeps consent and conversation state across inbound posts.
+- Messages from before consent are stored as skipped and do not send. Booking stays off unless the relay is live.
+- Optional Loop sender is used only when `RELAY_SENDER=loop` and the relay is live. Default send path is unchanged.
+
 ## v0.7.0 — 2026-09-22 — Relay consent gate and GHL booking tools
 - Added a client-agnostic STOP/opt-out gate and one-time confirmation in the relay. A later message does not re-enter the model.
 - Added GHL free-slot and appointment tools. Slots offered to a lead come from the provider payload. A booking is confirmed only after the appointment receipt includes matching `id`, `calendarId`, `locationId`, `contactId`, and `startTime`.

@@ -97,6 +97,8 @@ def contact_tags(contact):
 def send_reply(contact, text):
     if not LIVE:
         logj({"act": "send", "dry": True, "contact": contact, "text": text}); return
+    if c("RELAY_SENDER", "ghl").lower() == "loop":
+        _send_loop(text); return
     s, d = ghl("POST", "/conversations/messages",
                {"type": GHL_MSG_TYPE, "contactId": contact, "message": text})
     # Channel fallback: the same CRM location often holds IG + SMS leads. Sending the wrong
@@ -109,6 +111,28 @@ def send_reply(contact, text):
             if s2 in (200, 201):
                 logj({"act": "send-fallback", "type": alt, "status": s2, "contact": contact}); s = s2; break
     logj({"act": "send", "status": s, "contact": contact, "text": text})
+
+def _send_loop(text):
+    phone = c("RELAY_ALLOWED_PHONE")
+    sender = c("LOOP_SENDER_ID")
+    key = c("LOOP_MESSAGE_API_KEY")
+    if not (phone and sender and key):
+        logj({"act": "send", "skipped": "loop-not-configured"}); return
+    req = urllib.request.Request(
+        "https://a.loopmessage.com/api/v1/message/send/",
+        data=json.dumps({"contact": phone, "text": text, "sender": sender, "passthrough": "sdr-relay"}).encode(),
+        headers={"Authorization": key, "Content-Type": "application/json", "Accept": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=25) as response:
+            body = json.loads(response.read().decode() or "{}")
+        if not (body.get("message_id") or body.get("id")):
+            logj({"act": "send", "skipped": "loop-receipt-missing"}); return
+        logj({"act": "send", "channel": "loop", "status": response.status})
+    except Exception as exc:
+        logj({"act": "send", "channel": "loop", "error": str(exc)[:160]})
+
 
 def add_tags(contact, tags):
     if tags and LIVE: ghl("POST", f"/contacts/{contact}/tags", {"tags": tags})
@@ -247,17 +271,42 @@ def pick(p, names):
         if isinstance(v, str) and v.strip(): return v.strip()
     return ""
 
+def _same_phone(left, right):
+    digits = lambda value: "".join(ch for ch in str(value or "") if ch.isdigit())
+    a, b = digits(left), digits(right)
+    return bool(a and b and a[-10:] == b[-10:])
+
+
 def handle(p):
     contact = pick(p, ["contact_id", "contactId", "id"])
     text = pick(p, ["text", "message", "body"])
     if not (contact and text):
         logj({"skip": "no-route"}); return {"ok": True, "skipped": True}
-    tags = contact_tags(contact)                       # FAIL-CLOSED: CRM is authoritative
-    if tags is None:
+    allowed_phone = c("RELAY_ALLOWED_PHONE")
+    inbound_phone = pick(p, ["phone"])
+    if allowed_phone and inbound_phone and not _same_phone(allowed_phone, inbound_phone):
+        logj({"skip": "phone", "contact": contact}); return {"ok": True, "skipped": "phone"}
+    con = db()
+    state = _load_engine(con, contact)
+    if p.get("consented") is True:
+        state["consented"] = True
+        if not state.get("consented_at"):
+            state["consented_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        _save_engine(con, contact, state)
+    provider_time = pick(p, ["occurredAt", "dateAdded", "receivedAt"])
+    if state.get("consented_at") and provider_time and provider_time < state["consented_at"] and p.get("consented") is not True:
+        event_id = pick(p, ["providerEventId", "messageId", "eventId", "event_id"])
+        if event_id and event_id not in state["handled_events"]:
+            state["handled_events"].append(event_id)
+            _save_engine(con, contact, state)
+        logj({"skip": "before-consent", "contact": contact}); return {"ok": True, "skipped": "before-consent", "sent": False}
+    tags = None if state.get("consented") else contact_tags(contact)
+    if tags is None and not state.get("consented"):
         logj({"skip": "tag-fetch-failed", "contact": contact}); return {"ok": True, "skipped": "tag-fetch-failed"}
+    tags = tags or []
     if any(t in tags for t in GUARD_TAGS):
         logj({"skip": "guard", "contact": contact}); return {"ok": True, "skipped": "guard"}
-    if ENABLE_TAG and ENABLE_TAG not in tags:          # not opted-in yet
+    if not state.get("consented") and ENABLE_TAG and ENABLE_TAG not in tags:
         # Keyword-OR-tag: if they OPENED with a campaign keyword, self-tag + engage (don't wait on
         # the CRM to tag them). Otherwise skip — this is what keeps the bot out of personal DMs.
         if KEYWORDS and any(k in (text or "").lower() for k in KEYWORDS):
@@ -265,8 +314,6 @@ def handle(p):
             logj({"selftag": ENABLE_TAG, "contact": contact})
         else:
             logj({"skip": "not-keyword-lead", "contact": contact}); return {"ok": True, "skipped": "not-keyword-lead"}
-    con = db()
-    state = _load_engine(con, contact)
     event_id = pick(p, ["providerEventId", "messageId", "eventId", "event_id"])
     if event_id and event_id in state["handled_events"]:
         logj({"skip": "duplicate", "contact": contact}); return {"ok": True, "duplicate": True, "sent": False}
@@ -301,6 +348,8 @@ def handle(p):
         )
 
     def book_fn(slot):
+        if not LIVE:
+            raise CalendarReceiptError("relay is not live")
         body = request_for(slot)
         status, data = ghl("POST", "/calendars/events/appointments", body)
         if status not in (200, 201) or not isinstance(data, dict):
@@ -337,6 +386,12 @@ def handle(p):
     return {"ok": True, "reply": reply, "sent": bool(effect.get("send") and reply), "duplicate": False, "booked": bool(effect.get("booked"))}
 
 class H(BaseHTTPRequestHandler):
+    def do_GET(self):
+        if self.path.split("?")[0] not in ("/health", "/"):
+            self.send_response(404); self.end_headers(); return
+        self.send_response(200); self.send_header("Content-Type", "application/json"); self.end_headers()
+        self.wfile.write(json.dumps({"ok": True, "live": bool(LIVE), "service": "sdr-relay"}).encode())
+
     def do_POST(self):
         if self.headers.get("x-webhook-secret") != SECRET:
             self.send_response(401); self.end_headers(); self.wfile.write(b'{"error":"secret"}'); return

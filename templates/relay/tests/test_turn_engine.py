@@ -2,9 +2,12 @@ import json
 import os
 import sys
 import tempfile
+import threading
 import unittest
+import urllib.request
 from pathlib import Path
 from unittest import mock
+from http.server import ThreadingHTTPServer
 
 HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
@@ -217,6 +220,7 @@ class RelayWireTests(unittest.TestCase):
              mock.patch.object(agent_service, "ghl", side_effect=fake_ghl), \
              mock.patch.object(agent_service, "think", side_effect=fake_think), \
              mock.patch.object(agent_service, "send_reply", side_effect=lambda contact, text: sent.append(text)), \
+             mock.patch.object(agent_service, "LIVE", True), \
              mock.patch.dict(os.environ, {"GHL_CALENDAR_ID": "cal-1", "GHL_LOCATION_ID": "loc-1", "GHL_APPOINTMENT_NOTIFY": "false"}):
             agent_service.handle({"contactId": "contact-1", "messageId": "a", "text": "lawn"})
             agent_service.handle({"contactId": "contact-1", "messageId": "b", "text": "fort example"})
@@ -234,6 +238,63 @@ class RelayWireTests(unittest.TestCase):
         self.assertFalse(posts[0]["toNotify"])
         self.assertNotIn("Reply STOP", " ".join(sent))
         json.dumps(posts[0])
+
+
+class PersistentRelayTests(unittest.TestCase):
+    def test_http_server_keeps_inbound_turns_and_health_does_not_send(self):
+        seen = []
+
+        def fake_think(hist, inbound, profile):
+            seen.append({"inbound": inbound, "history": len(hist)})
+            if "green" in inbound.lower():
+                return {"reply": "What city is the property in?", "actions": [], "profile": {"project": "putting green"}}
+            return {"reply": "When do you want the visit?", "actions": [], "profile": {"location": inbound.strip()}}
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), agent_service.H)
+        port = server.server_address[1]
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        agent_service.SECRET = "relay-test-secret"
+        try:
+            thread.start()
+            with mock.patch.object(agent_service, "contact_tags", return_value=[]), \
+                 mock.patch.object(agent_service, "think", side_effect=fake_think), \
+                 mock.patch.object(agent_service, "ghl", side_effect=AssertionError("provider write is not allowed in this test")):
+                health = urllib.request.urlopen(f"http://127.0.0.1:{port}/health", timeout=5)
+                self.assertEqual(json.loads(health.read().decode())["service"], "sdr-relay")
+                self.assertEqual(seen, [])
+
+                def post(message_id, text, consented=False, occurred_at=""):
+                    payload = {"contactId": "contact-persist", "text": text, "messageId": message_id, "phone": "+14707748556"}
+                    if consented:
+                        payload["consented"] = True
+                    if occurred_at:
+                        payload["occurredAt"] = occurred_at
+                    request = urllib.request.Request(
+                        f"http://127.0.0.1:{port}/inbound",
+                        data=json.dumps(payload).encode(),
+                        headers={"content-type": "application/json", "x-webhook-secret": "relay-test-secret"},
+                        method="POST",
+                    )
+                    with urllib.request.urlopen(request, timeout=5) as response:
+                        return json.loads(response.read().decode())
+
+                blocked = post("blocked", "putting green")
+                first = post("m1", "putting green", consented=True)
+                old = post("old", "yesterday", occurred_at="2000-01-01T00:00:00Z")
+                second = post("m2", "Fort Lauderdale")
+                again = post("m2", "Fort Lauderdale")
+        finally:
+            server.shutdown()
+            server.server_close()
+
+        self.assertEqual(blocked["skipped"], "not-keyword-lead")
+        self.assertEqual(old["skipped"], "before-consent")
+        self.assertFalse(first.get("skipped"))
+        self.assertIn("city", first["reply"])
+        self.assertIn("visit", second["reply"])
+        self.assertEqual(seen[1]["history"] > 0, True)
+        self.assertTrue(again["duplicate"])
+        self.assertFalse(again["sent"])
 
 
 if __name__ == "__main__":

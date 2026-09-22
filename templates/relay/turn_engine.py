@@ -32,6 +32,8 @@ def fresh_state() -> dict:
         "booked_slot": "",
         "handled_events": [],
         "sent_keys": [],
+        "consented": False,
+        "consented_at": "",
     }
 
 
