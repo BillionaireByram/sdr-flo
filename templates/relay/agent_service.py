@@ -21,7 +21,8 @@ import json, os, re, sqlite3, time, urllib.request, urllib.error
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from access_grant import consume_grant
+from access_grant import commit_grant, peek_grant
+from outbound import begin_outbound, mark_accepted, remember_provider_id
 from copy_config import load_client_copy
 from ghl_calendar import CalendarReceiptError, appointment_body, free_slots_path, parse_free_slots
 from ghl_poll import fetch_inbound
@@ -99,9 +100,14 @@ def contact_tags(contact):
 
 def send_reply(contact, text):
     if not LIVE:
-        logj({"act": "send", "dry": True, "contact": contact, "text": text}); return
+        logj({"act": "send", "dry": True, "contact": contact}); return {"ok": False, "provider_id": ""}
     if c("RELAY_SENDER", "ghl").lower() == "loop":
-        _send_loop(text); return
+        try:
+            provider_id = _send_loop(text)
+        except Exception as exc:
+            logj({"act": "send", "channel": "loop", "error": str(exc)[:160]})
+            return {"ok": False, "provider_id": ""}
+        return {"ok": bool(provider_id), "provider_id": provider_id or ""}
     s, d = ghl("POST", "/conversations/messages",
                {"type": GHL_MSG_TYPE, "contactId": contact, "message": text})
     # Channel fallback: the same CRM location often holds IG + SMS leads. Sending the wrong
@@ -113,28 +119,76 @@ def send_reply(contact, text):
                         {"type": alt, "contactId": contact, "message": text})
             if s2 in (200, 201):
                 logj({"act": "send-fallback", "type": alt, "status": s2, "contact": contact}); s = s2; break
-    logj({"act": "send", "status": s, "contact": contact, "text": text})
+    provider_id = ""
+    if isinstance(d, dict):
+        provider_id = str(d.get("messageId") or d.get("id") or "").strip()
+    logj({"act": "send", "status": s, "contact": contact, "has_receipt": bool(provider_id)})
+    return {"ok": s in (200, 201) and bool(provider_id), "provider_id": provider_id}
 
 def _send_loop(text):
     phone = c("RELAY_ALLOWED_PHONE")
     sender = c("LOOP_SENDER_ID")
     key = c("LOOP_MESSAGE_API_KEY")
     if not (phone and sender and key):
-        logj({"act": "send", "skipped": "loop-not-configured"}); return
+        logj({"act": "send", "skipped": "loop-not-configured"}); return ""
     req = urllib.request.Request(
         "https://a.loopmessage.com/api/v1/message/send/",
         data=json.dumps({"contact": phone, "text": text, "sender": sender, "passthrough": "sdr-relay"}).encode(),
         headers={"Authorization": key, "Content-Type": "application/json", "Accept": "application/json"},
         method="POST",
     )
+    with urllib.request.urlopen(req, timeout=25) as response:
+        body = json.loads(response.read().decode() or "{}")
+    provider_id = str(body.get("message_id") or body.get("id") or "").strip()
+    logj({"act": "send", "channel": "loop", "status": response.status, "has_receipt": bool(provider_id)})
+    return provider_id
+
+
+def provider_status(provider_id):
+    if not provider_id or c("RELAY_SENDER", "ghl").lower() != "loop":
+        return "unknown"
+    key = c("LOOP_MESSAGE_API_KEY")
+    if not key:
+        return "unknown"
+    req = urllib.request.Request(
+        f"https://a.loopmessage.com/api/v1/message/status/{provider_id}/",
+        headers={"Authorization": key, "Accept": "application/json"},
+    )
     try:
         with urllib.request.urlopen(req, timeout=25) as response:
             body = json.loads(response.read().decode() or "{}")
-        if not (body.get("message_id") or body.get("id")):
-            logj({"act": "send", "skipped": "loop-receipt-missing"}); return
-        logj({"act": "send", "channel": "loop", "status": response.status})
+    except Exception:
+        return "unknown"
+    raw = str(body.get("status") or "").lower()
+    if raw in ("sent", "delivered"):
+        return "accepted"
+    if raw in ("failed", "error"):
+        return "failed"
+    return "unknown"
+
+
+def deliver_outbound(con, dedupe_key, contact, kind, body):
+    plan = begin_outbound(con, dedupe_key, contact, kind, body)
+    if plan["action"] == "blocked":
+        return {"ok": False, "sent": False, "reason": "unconfirmed"}
+    if plan["action"] == "readback":
+        if provider_status(plan["provider_id"]) == "accepted":
+            mark_accepted(con, dedupe_key)
+            return {"ok": True, "sent": False, "already": True, "provider_id": plan["provider_id"]}
+        return {"ok": False, "sent": False, "reason": "unconfirmed"}
+    try:
+        receipt = send_reply(contact, plan["body"]) or {}
     except Exception as exc:
-        logj({"act": "send", "channel": "loop", "error": str(exc)[:160]})
+        logj({"act": "send", "error": str(exc)[:160]})
+        return {"ok": False, "sent": False, "reason": "send_failed"}
+    provider_id = str(receipt.get("provider_id") or "").strip() if isinstance(receipt, dict) else ""
+    if not provider_id:
+        return {"ok": False, "sent": False, "reason": "no_receipt"}
+    remember_provider_id(con, dedupe_key, provider_id)
+    if provider_status(provider_id) != "accepted":
+        return {"ok": False, "sent": False, "reason": "readback"}
+    mark_accepted(con, dedupe_key)
+    return {"ok": True, "sent": True, "provider_id": provider_id}
 
 
 def add_tags(contact, tags):
@@ -390,11 +444,21 @@ def handle(p):
     reply = clean_text(raw_reply) if state.get("stage") == "open" else raw_reply
     if effect.get("opt_out"):
         add_tags(contact, ["do-not-contact"])
+    if effect.get("booked") and (not effect.get("appointment_id") or str(effect.get("appointment_id")) not in reply):
+        reply = ""
+        effect = {**effect, "send": False, "booked": False}
+    sent = False
     if effect.get("send") and reply:
-        send_reply(contact, reply)
-        con.execute("INSERT INTO turns VALUES(?,?,?,?)", (contact, "assistant", reply, time.time())); con.commit()
+        if c("RELAY_SENDER", "ghl").lower() == "loop":
+            delivered = deliver_outbound(con, f"reply:{event_id or 'none'}", contact, "reply", reply)
+            sent = bool(delivered.get("ok"))
+        else:
+            send_reply(contact, reply)
+            sent = True
+        if sent:
+            con.execute("INSERT INTO turns VALUES(?,?,?,?)", (contact, "assistant", reply, time.time())); con.commit()
     logj({"handled": True, "contact": contact, "reply": (reply or "")[:120], "booked": bool(effect.get("booked"))})
-    return {"ok": True, "reply": reply, "sent": bool(effect.get("send") and reply), "duplicate": False, "booked": bool(effect.get("booked"))}
+    return {"ok": True, "reply": reply if sent or not effect.get("booked") else "", "sent": sent, "duplicate": False, "booked": bool(effect.get("booked") and sent)}
 
 def _phone_last4(phone: str) -> str:
     digits = "".join(ch for ch in phone if ch.isdigit())
@@ -404,7 +468,7 @@ def _phone_last4(phone: str) -> str:
 
 
 def accept_public(p, action: str):
-    grant = consume_grant(
+    grant = peek_grant(
         db(),
         pick(p, ["accessCode", "access_code"]),
         c("DEMO_ACCESS_SECRET"),
@@ -417,7 +481,16 @@ def accept_public(p, action: str):
     expected_phrase = c("OPT_IN_PHRASE").strip()
     if not expected_phrase or phrase.upper() != expected_phrase.upper() or _phone_last4(pick(p, ["last4"])) != _phone_last4(c("RELAY_ALLOWED_PHONE")):
         return {"ok": False, "httpStatus": 400, "sent": False, "message": "Opt-in phrase or last four digits did not match. Nothing was sent."}
-    return {"ok": True}
+    return {"ok": True, "code_hash": grant.get("code_hash", "")}
+
+
+def _mark_consent(con, contact):
+    state = _load_engine(con, contact)
+    state["consented"] = True
+    if not state.get("consented_at"):
+        state["consented_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    state["stage"] = "awaiting_reply"
+    _save_engine(con, contact, state)
 
 
 def accept_opt_in(p):
@@ -429,19 +502,19 @@ def accept_opt_in(p):
     if "?" not in opener:
         return {"ok": False, "httpStatus": 503, "sent": False, "message": "The opener does not invite a reply. Nothing was sent."}
     contact = c("RELAY_CONTACT_ID") or pick(p, ["contactId", "contact_id"])
-    if not contact:
+    code = pick(p, ["accessCode", "access_code"])
+    if not contact or not code:
         return {"ok": False, "httpStatus": 503, "sent": False, "message": "The relay has no contact. Nothing was sent."}
     con = db()
-    state = _load_engine(con, contact)
-    state["consented"] = True
-    if not state.get("consented_at"):
-        state["consented_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-    state["stage"] = "awaiting_reply"
-    _save_engine(con, contact, state)
-    send_reply(contact, opener)
-    con.execute("INSERT INTO turns VALUES(?,?,?,?)", (contact, "assistant", opener, time.time()))
-    con.commit()
-    return {"ok": True, "httpStatus": 200, "sent": True, "reply": opener, "booked": False}
+    delivered = deliver_outbound(con, f"opener:{gate['code_hash']}", contact, "opener", opener)
+    if not delivered.get("ok"):
+        return {"ok": False, "httpStatus": 502, "sent": False, "message": "The opener was not confirmed by the provider. Nothing was marked consented."}
+    _mark_consent(con, contact)
+    commit_grant(con, code)
+    if delivered.get("sent"):
+        con.execute("INSERT INTO turns VALUES(?,?,?,?)", (contact, "assistant", opener, time.time()))
+        con.commit()
+    return {"ok": True, "httpStatus": 200, "sent": bool(delivered.get("sent")), "reply": opener, "booked": False}
 
 
 def accept_pull(p):
@@ -471,6 +544,8 @@ def accept_pull(p):
         })
         forwarded += 1
         sent = sent or bool(result.get("sent"))
+    if forwarded == 0 or sent:
+        commit_grant(db(), pick(p, ["accessCode", "access_code"]))
     return {"ok": True, "httpStatus": 200, "sent": sent, "forwarded": forwarded, "message": "The relay checked the conversation."}
 
 

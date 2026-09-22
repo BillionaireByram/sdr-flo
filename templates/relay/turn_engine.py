@@ -162,14 +162,16 @@ def _book(current, event_id, text, reply, tool, missing, slots_fn, book_fn, appo
         current["stage"] = "handoff"
         _mark(current, event_id, sent=True)
         return current, _effect(send=True, reply="I could not confirm the booking with the calendar. A person will take it from here.", handoff=True)
+    confirmation = render_template(templates["confirmation"], slot=chosen, appointment_id=appointment_id)
+    if appointment_id not in confirmation:
+        current["stage"] = "handoff"
+        _mark(current, event_id, sent=True)
+        return current, _effect(send=True, reply="I could not confirm the booking with the calendar. A person will take it from here.", handoff=True)
     current["appointment_id"] = appointment_id
     current["booked_slot"] = chosen
     current["stage"] = "booked"
     current["offered"] = []
     _mark(current, event_id, sent=True)
-    confirmation = render_template(templates["confirmation"], slot=chosen, appointment_id=appointment_id)
-    if appointment_id not in confirmation:
-        return current, _effect(send=True, reply="I could not confirm the booking with the calendar. A person will take it from here.", handoff=True)
     return current, _effect(send=True, reply=confirmation, booked=True, appointment_id=appointment_id)
 
 

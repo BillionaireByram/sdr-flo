@@ -16,7 +16,7 @@ os.environ.setdefault("RELAY_LOG", str(Path(os.environ["RELAY_DB"]).parent / "ag
 os.environ.setdefault("RELAY_LIVE", "false")
 
 import agent_service
-from access_grant import mint_demo_access
+from access_grant import _code_hash, mint_demo_access
 from copy_config import GENERIC
 
 SLOTS = ["2026-09-24T10:00:00-04:00", "2026-09-24T11:00:00-04:00"]
@@ -94,7 +94,8 @@ class ClientPathTests(unittest.TestCase):
     def test_opt_in_through_booked_confirmation_and_blocks(self):
         with mock.patch.dict(os.environ, self.env()), \
              mock.patch.object(agent_service, "LIVE", True), \
-             mock.patch.object(agent_service, "send_reply", side_effect=lambda contact, text: self.sent.append(text)), \
+             mock.patch.object(agent_service, "send_reply", side_effect=lambda contact, text: self.sent.append(text) or {"ok": True, "provider_id": f"prov-{len(self.sent)}"}), \
+             mock.patch.object(agent_service, "provider_status", return_value="accepted"), \
              mock.patch.object(agent_service, "ghl", side_effect=self.ghl), \
              mock.patch.object(agent_service, "think", side_effect=self.think):
             missing = agent_service.accept_opt_in({"phrase": "DEMO OPT IN", "last4": "0199", "rateKey": "missing"})
@@ -129,6 +130,39 @@ class ClientPathTests(unittest.TestCase):
         self.assertIn("opted out", stopped["reply"].lower())
         self.assertEqual(self.sent[0], opened["reply"])
         self.assertIn("appt-1", self.sent[-2] if len(self.sent) > 2 else "")
+
+
+class OpenerFailureTests(unittest.TestCase):
+    def test_failed_send_does_not_consent_and_retry_does_not_send_again(self):
+        copy = Path(tempfile.mkdtemp()) / "copy.json"
+        copy.write_text('{"opener":"Demo opener, not a signed customer. What project is this?"}')
+        secret = "fail-secret"
+        code = mint_demo_access(secret, int(time.time() * 1000) + 60_000)
+        calls = {"n": 0}
+
+        def fail_send(contact, text):
+            calls["n"] += 1
+            raise RuntimeError("provider down")
+
+        env = {
+            "RELAY_COPY_FILE": str(copy),
+            "DEMO_ACCESS_SECRET": secret,
+            "OPT_IN_PHRASE": "DEMO OPT IN",
+            "RELAY_ALLOWED_PHONE": "+15555550199",
+            "RELAY_CONTACT_ID": "contact-fail",
+        }
+        with mock.patch.dict(os.environ, env), mock.patch.object(agent_service, "LIVE", True), \
+             mock.patch.object(agent_service, "send_reply", side_effect=fail_send):
+            first = agent_service.accept_opt_in({"accessCode": code, "phrase": "DEMO OPT IN", "last4": "0199", "rateKey": "fail-1"})
+            second = agent_service.accept_opt_in({"accessCode": code, "phrase": "DEMO OPT IN", "last4": "0199", "rateKey": "fail-2"})
+            state = agent_service._load_engine(agent_service.db(), "contact-fail")
+        self.assertEqual(first["httpStatus"], 502)
+        self.assertFalse(first["sent"])
+        self.assertEqual(second["httpStatus"], 502)
+        self.assertEqual(calls["n"], 1)
+        self.assertFalse(state["consented"])
+        used = agent_service.db().execute("SELECT 1 FROM used_grants WHERE code_hash=?", (_code_hash(code),)).fetchone()
+        self.assertIsNone(used)
 
 
 class MintCliTests(unittest.TestCase):

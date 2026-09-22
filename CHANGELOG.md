@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.7.4 — 2026-09-22 — Opener delivery receipt
+- The relay stores a pending opener before sending and marks consent only after the provider id is read back as sent or delivered.
+- A failed or unconfirmed send is not retried, so a lost response cannot create a second opener. A pending row alone is not treated as delivery.
+
 ## v0.7.3 — 2026-09-22 — Client copy on the relay send path
 - Opt-in sends the configured opener. It does not invent an inbound lead message.
 - Slot offer, booking confirmation, follow-up, and qualification questions come from a client file. Defaults stay generic.

@@ -57,7 +57,7 @@ def allow_rate(con: sqlite3.Connection, rate_key: str, now_ms: int, limit: int =
     return True
 
 
-def consume_grant(con: sqlite3.Connection, code: str, secret: str, rate_key: str, live: bool, now_ms: int | None = None) -> dict:
+def peek_grant(con: sqlite3.Connection, code: str, secret: str, rate_key: str, live: bool, now_ms: int | None = None) -> dict:
     now_ms = int(time.time() * 1000) if now_ms is None else now_ms
     ensure_grant_tables(con)
     if not allow_rate(con, rate_key or "relay", now_ms):
@@ -71,6 +71,19 @@ def consume_grant(con: sqlite3.Connection, code: str, secret: str, rate_key: str
     existing = con.execute("SELECT 1 FROM used_grants WHERE code_hash=?", (digest,)).fetchone()
     if existing:
         return {"ok": False, "httpStatus": 409, "sent": False, "message": "This demo access code was already used. Nothing was sent."}
-    con.execute("INSERT INTO used_grants VALUES(?,?)", (digest, now_ms))
+    return {"ok": True, "httpStatus": 200, "sent": False, "message": "", "code_hash": digest}
+
+
+def commit_grant(con: sqlite3.Connection, code: str, now_ms: int | None = None) -> None:
+    now_ms = int(time.time() * 1000) if now_ms is None else now_ms
+    ensure_grant_tables(con)
+    digest = _code_hash(code.strip())
+    con.execute("INSERT OR IGNORE INTO used_grants VALUES(?,?)", (digest, now_ms))
     con.commit()
-    return {"ok": True, "httpStatus": 200, "sent": False, "message": ""}
+
+
+def consume_grant(con: sqlite3.Connection, code: str, secret: str, rate_key: str, live: bool, now_ms: int | None = None) -> dict:
+    peeked = peek_grant(con, code, secret, rate_key, live, now_ms)
+    if peeked.get("ok"):
+        commit_grant(con, code, now_ms)
+    return peeked
