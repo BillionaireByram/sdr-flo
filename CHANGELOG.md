@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.7.0 — 2026-09-22 — Relay consent gate and GHL booking tools
+- Added a client-agnostic STOP/opt-out gate and one-time confirmation in the relay. A later message does not re-enter the model.
+- Added GHL free-slot and appointment tools. Slots offered to a lead come from the provider payload. A booking is confirmed only after the appointment receipt includes matching `id`, `calendarId`, `locationId`, `contactId`, and `startTime`.
+- Added inbound event idempotency so a repeated provider message does not send or book twice.
+- No service install, timer, or live relay is started by this change.
+
 ## v0.6.0 — 2026-08-11 — Nightly sales-call audit intelligence
 - Added an evidence-backed transcript audit contract with strict validation and timestamped quote requirements.
 - Added deterministic JSON + Markdown reports for three distinct jobs: Marketing message correction, Sales Manager coaching, and Owner unfiltered operating truth.

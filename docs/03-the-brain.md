@@ -9,6 +9,7 @@ The brain is what makes Flo a setter, not a chatbot. It runs a **stage-gated sal
 | `SOUL.md` | Identity, voice, the one objective, the hard rules. Loaded every message. |
 | `skills/appointment-setter/SKILL.md` | The stage machine: stages, gates, gap-filling, close, objections, tonality. |
 | booking plugin | `get_availability` + `book_call` on Google Calendar (freeBusy + events.insert). Books directly, no link. |
+| relay calendar tools | `templates/relay/ghl_calendar.py` + `turn_engine.py`. GHL free slots and appointment create, used only when `GHL_CALENDAR_ID` and `GHL_LOCATION_ID` are set. The model cannot invent a slot, and a booked claim requires the provider receipt. Installing this repo does not restart a live relay. |
 | lead-profile plugin | `lead_profile_lookup` — pulls the lead's enriched profile so Flo opens with context. |
 | notice-filter plugin | strips system notices + dashes before send; disables markdown spam. |
 

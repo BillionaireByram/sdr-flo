@@ -21,6 +21,9 @@ import json, os, re, sqlite3, time, urllib.request, urllib.error
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+from ghl_calendar import CalendarReceiptError, appointment_body, free_slots_path, parse_free_slots
+from turn_engine import booking_instructions, fresh_state, run_turn
+
 # ---- config (env) ----
 def c(k, d=""): return os.environ.get(k, d)
 SECRET      = c("RELAY_WEBHOOK_SECRET")
@@ -65,6 +68,7 @@ def db():
     con = sqlite3.connect(DB)
     con.execute("CREATE TABLE IF NOT EXISTS turns(contact TEXT,role TEXT,content TEXT,ts REAL)")
     con.execute("CREATE TABLE IF NOT EXISTS profiles(contact TEXT PRIMARY KEY,data TEXT)")
+    con.execute("CREATE TABLE IF NOT EXISTS engine_state(contact TEXT PRIMARY KEY, data TEXT)")
     return con
 
 # ---- CRM (GHL) helpers — swap for the client's channel ----
@@ -158,18 +162,23 @@ def clean_text(t):
         logj({"error": "blocked-structured-reply", "preview": str(t)[:160]})
         return ""
     urls = re.findall(r"https?://\S+", t)
-    for k, u in enumerate(urls): t = t.replace(u, "\x00%d\x00" % k)
+    isos = re.findall(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:Z|[+-]\d{2}:\d{2})", t)
+    held = urls + isos
+    for k, u in enumerate(held): t = t.replace(u, "\x00%d\x00" % k)
     t = t.replace("—", ", ").replace("–", ", ")
     t = t.replace(" -- ", ", ").replace(" - ", ", ")
     t = re.sub(r"(?<=[A-Za-z0-9])-(?=[A-Za-z0-9])", " ", t)
     t = re.sub(r"[ ]{2,}", " ", t)
-    for k, u in enumerate(urls): t = t.replace("\x00%d\x00" % k, u)
+    for k, u in enumerate(held): t = t.replace("\x00%d\x00" % k, u)
     return t.strip()
 
 # ---- the brain ----
 def think(hist, inbound, profile):
     prof = ("\n\n## WHAT YOU ALREADY KNOW (never re-ask):\n" + json.dumps(profile)) if profile else ""
-    sysmsg = SOUL + prof + "\n\n## CURRENT CONVERSATION\nYou are MID conversation. Continue, never restart.\n" + TOOLS_DOC
+    tools = TOOLS_DOC
+    if c("GHL_CALENDAR_ID") and c("GHL_LOCATION_ID"):
+        tools += "\n" + booking_instructions(_required_fields())
+    sysmsg = SOUL + prof + "\n\n## CURRENT CONVERSATION\nYou are MID conversation. Continue, never restart.\n" + tools
     msgs = [{"role": "system", "content": sysmsg}] + hist + [{"role": "user", "content": inbound}]
     for _ in range(2):  # retry on empty/degenerate
         content = ""
@@ -191,6 +200,45 @@ def think(hist, inbound, profile):
         if len(re.sub(r"[^A-Za-z0-9]", "", rep)) >= 3: return out  # reject "?", empty
         logj({"error": "degenerate", "reply": rep[:60]})
     return {"reply": "", "actions": []}
+
+def _csv(name):
+    return tuple(item.strip() for item in c(name, "").split(",") if item.strip())
+
+
+def _required_fields():
+    raw = _csv("RELAY_REQUIRED_FIELDS")
+    return raw or ("project", "location", "timeline", "intent")
+
+
+def _load_engine(con, contact):
+    row = con.execute("SELECT data FROM engine_state WHERE contact=?", (contact,)).fetchone()
+    state = fresh_state()
+    if not row:
+        legacy = con.execute("SELECT data FROM profiles WHERE contact=?", (contact,)).fetchone()
+        if legacy:
+            try:
+                saved = json.loads(legacy[0])
+                if isinstance(saved, dict):
+                    state["profile"] = {k: v for k, v in saved.items() if isinstance(v, str)}
+            except Exception:
+                pass
+        return state
+    try:
+        saved = json.loads(row[0])
+    except Exception:
+        return state
+    if isinstance(saved, dict):
+        for key in state:
+            if key in saved:
+                state[key] = saved[key]
+    return state
+
+
+def _save_engine(con, contact, state):
+    con.execute("INSERT OR REPLACE INTO engine_state VALUES(?,?)", (contact, json.dumps(state)))
+    con.execute("INSERT OR REPLACE INTO profiles VALUES(?,?)", (contact, json.dumps(state.get("profile") or {})))
+    con.commit()
+
 
 # ---- handle ----
 def pick(p, names):
@@ -218,25 +266,75 @@ def handle(p):
         else:
             logj({"skip": "not-keyword-lead", "contact": contact}); return {"ok": True, "skipped": "not-keyword-lead"}
     con = db()
+    state = _load_engine(con, contact)
+    event_id = pick(p, ["providerEventId", "messageId", "eventId", "event_id"])
+    if event_id and event_id in state["handled_events"]:
+        logj({"skip": "duplicate", "contact": contact}); return {"ok": True, "duplicate": True, "sent": False}
     con.execute("INSERT INTO turns VALUES(?,?,?,?)", (contact, "user", text, time.time())); con.commit()
     hist = [{"role": r, "content": cc} for r, cc in con.execute(
         "SELECT role,content FROM turns WHERE contact=? ORDER BY ts", (contact,)).fetchall()][-40:]
-    row = con.execute("SELECT data FROM profiles WHERE contact=?", (contact,)).fetchone()
-    profile = json.loads(row[0]) if row else {}
-    out = think(hist[:-1], text, profile)
-    reply = clean_text((out.get("reply") or "").strip())
-    if isinstance(out.get("profile"), dict):
-        merged = {**profile, **{k: v for k, v in out["profile"].items() if v}}
-        con.execute("INSERT OR REPLACE INTO profiles VALUES(?,?)", (contact, json.dumps(merged))); con.commit()
-    for a in (out.get("actions") or []):
-        if a.get("tool") == "tag": add_tags(contact, a.get("tags") or [])
-        elif a.get("tool") == "escalate": escalate(contact, a.get("reason", ""))
-    if reply:
+    tools_enabled = bool(c("GHL_CALENDAR_ID") and c("GHL_LOCATION_ID"))
+    captured = {}
+
+    def brain(inbound, profile, offered):
+        del offered
+        captured["out"] = think(hist[:-1], inbound, profile)
+        return captured["out"]
+
+    def slots_fn():
+        now_ms = int(time.time() * 1000)
+        path = free_slots_path(c("GHL_CALENDAR_ID"), now_ms, now_ms + 14 * 86_400_000, c("GHL_CALENDAR_TIMEZONE", "America/New_York"))
+        status, data = ghl("GET", path)
+        if status != 200:
+            raise CalendarReceiptError("free slots were not accepted")
+        return parse_free_slots(data)
+
+    def request_for(slot):
+        return appointment_body(
+            calendar_id=c("GHL_CALENDAR_ID"),
+            location_id=c("GHL_LOCATION_ID"),
+            contact_id=contact,
+            start_time=slot,
+            slot_minutes=int(c("GHL_SLOT_MINUTES", "30") or "30"),
+            title=c("GHL_APPOINTMENT_TITLE", "Consultation"),
+            notify=c("GHL_APPOINTMENT_NOTIFY", "false").lower() in ("1", "true", "yes"),
+        )
+
+    def book_fn(slot):
+        body = request_for(slot)
+        status, data = ghl("POST", "/calendars/events/appointments", body)
+        if status not in (200, 201) or not isinstance(data, dict):
+            raise CalendarReceiptError("appointment was not accepted")
+        return data
+
+    state, effect = run_turn(
+        state=state,
+        event_id=event_id,
+        text=text,
+        brain=brain,
+        slots_fn=slots_fn,
+        book_fn=book_fn,
+        required=_required_fields(),
+        in_area=_csv("RELAY_IN_AREA"),
+        out_of_area=_csv("RELAY_OUT_OF_AREA"),
+        tools_enabled=tools_enabled,
+        appointment_request=request_for,
+    )
+    _save_engine(con, contact, state)
+    for action in (captured.get("out") or {}).get("actions") or []:
+        if action.get("tool") == "tag":
+            add_tags(contact, action.get("tags") or [])
+        elif action.get("tool") == "escalate":
+            escalate(contact, action.get("reason", ""))
+    raw_reply = effect.get("reply") or ""
+    reply = clean_text(raw_reply) if state.get("stage") == "open" else raw_reply
+    if effect.get("opt_out"):
+        add_tags(contact, ["do-not-contact"])
+    if effect.get("send") and reply:
         send_reply(contact, reply)
         con.execute("INSERT INTO turns VALUES(?,?,?,?)", (contact, "assistant", reply, time.time())); con.commit()
-        # TODO: mirror to Supabase (conversations_log + events, channel-tagged)
-    logj({"handled": True, "contact": contact, "reply": reply[:120]})
-    return {"ok": True, "reply": reply}
+    logj({"handled": True, "contact": contact, "reply": (reply or "")[:120], "booked": bool(effect.get("booked"))})
+    return {"ok": True, "reply": reply, "sent": bool(effect.get("send") and reply), "duplicate": False, "booked": bool(effect.get("booked"))}
 
 class H(BaseHTTPRequestHandler):
     def do_POST(self):
