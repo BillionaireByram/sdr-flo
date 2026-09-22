@@ -21,7 +21,9 @@ import json, os, re, sqlite3, time, urllib.request, urllib.error
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+from access_grant import consume_grant
 from ghl_calendar import CalendarReceiptError, appointment_body, free_slots_path, parse_free_slots
+from ghl_poll import fetch_inbound
 from turn_engine import booking_instructions, fresh_state, run_turn
 
 # ---- config (env) ----
@@ -385,6 +387,75 @@ def handle(p):
     logj({"handled": True, "contact": contact, "reply": (reply or "")[:120], "booked": bool(effect.get("booked"))})
     return {"ok": True, "reply": reply, "sent": bool(effect.get("send") and reply), "duplicate": False, "booked": bool(effect.get("booked"))}
 
+def _phone_last4(phone: str) -> str:
+    digits = "".join(ch for ch in phone if ch.isdigit())
+    if len(digits) == 4:
+        return digits
+    return digits[-4:] if len(digits) >= 10 else ""
+
+
+def accept_public(p, action: str):
+    grant = consume_grant(
+        db(),
+        pick(p, ["accessCode", "access_code"]),
+        c("DEMO_ACCESS_SECRET"),
+        pick(p, ["rateKey", "rate_key"]) or action,
+        LIVE,
+    )
+    if not grant["ok"]:
+        return grant
+    phrase = pick(p, ["phrase"])
+    expected_phrase = c("OPT_IN_PHRASE").strip()
+    if not expected_phrase or phrase.upper() != expected_phrase.upper() or _phone_last4(pick(p, ["last4"])) != _phone_last4(c("RELAY_ALLOWED_PHONE")):
+        return {"ok": False, "httpStatus": 400, "sent": False, "message": "Opt-in phrase or last four digits did not match. Nothing was sent."}
+    return {"ok": True}
+
+
+def accept_opt_in(p):
+    gate = accept_public(p, "opt-in")
+    if not gate.get("ok"):
+        return gate
+    p = dict(p)
+    p["consented"] = True
+    p.setdefault("contactId", c("RELAY_CONTACT_ID"))
+    p.setdefault("phone", c("RELAY_ALLOWED_PHONE"))
+    p.setdefault("text", "I opted in and want to talk about the project.")
+    p.setdefault("messageId", "relay-opt-in")
+    result = handle(p)
+    result["httpStatus"] = 200
+    return result
+
+
+def accept_pull(p):
+    gate = accept_public(p, "pull")
+    if not gate.get("ok"):
+        return gate
+    conversation_id = c("GHL_CONVERSATION_ID")
+    if not conversation_id:
+        return {"ok": False, "httpStatus": 503, "sent": False, "message": "The relay has no conversation to read. Nothing was sent."}
+
+    def ghl_get(path):
+        return ghl("GET", path)
+
+    try:
+        messages = fetch_inbound(ghl_get, conversation_id)
+    except Exception:
+        return {"ok": False, "httpStatus": 502, "sent": False, "message": "GHL inbound could not be read. Nothing was sent."}
+    sent = False
+    forwarded = 0
+    for message in messages:
+        result = handle({
+            "contactId": c("RELAY_CONTACT_ID"),
+            "phone": c("RELAY_ALLOWED_PHONE"),
+            "text": message["body"],
+            "messageId": message["id"],
+            "occurredAt": message["occurredAt"],
+        })
+        forwarded += 1
+        sent = sent or bool(result.get("sent"))
+    return {"ok": True, "httpStatus": 200, "sent": sent, "forwarded": forwarded, "message": "The relay checked the conversation."}
+
+
 class H(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path.split("?")[0] not in ("/health", "/"):
@@ -398,8 +469,16 @@ class H(BaseHTTPRequestHandler):
         body = self.rfile.read(int(self.headers.get("content-length", 0) or 0))
         try: p = json.loads(body or b"{}")
         except Exception: p = {}
-        out = handle(p)
-        self.send_response(200); self.send_header("Content-Type", "application/json"); self.end_headers()
+        path = self.path.split("?")[0]
+        if path == "/opt-in":
+            out = accept_opt_in(p)
+        elif path == "/pull":
+            out = accept_pull(p)
+        else:
+            out = handle(p)
+            out.setdefault("httpStatus", 200)
+        status = int(out.get("httpStatus") or 200)
+        self.send_response(status); self.send_header("Content-Type", "application/json"); self.end_headers()
         self.wfile.write(json.dumps(out).encode())
     def log_message(self, *a): pass
 

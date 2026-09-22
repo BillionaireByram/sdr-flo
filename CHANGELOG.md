@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.7.2 — 2026-09-22 — Relay-owned demo access and GHL pull
+- `/opt-in` and `/pull` check a signed, single-use access code on the relay. Provider calls stay off unless the relay is live.
+- GHL conversation reads live in the relay, not in the public app.
+
 ## v0.7.1 — 2026-09-22 — Persistent relay inbound
 - The relay HTTP server keeps consent and conversation state across inbound posts.
 - Messages from before consent are stored as skipped and do not send. Booking stays off unless the relay is live.
