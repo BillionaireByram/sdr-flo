@@ -264,7 +264,7 @@ class PersistentRelayTests(unittest.TestCase):
                 self.assertEqual(seen, [])
 
                 def post(message_id, text, consented=False, occurred_at=""):
-                    payload = {"contactId": "contact-persist", "text": text, "messageId": message_id, "phone": "+14707748556"}
+                    payload = {"contactId": "contact-persist", "text": text, "messageId": message_id, "phone": "+15555550199"}
                     if consented:
                         payload["consented"] = True
                     if occurred_at:
