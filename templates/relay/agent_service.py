@@ -26,6 +26,7 @@ from outbound import begin_outbound, mark_accepted, remember_provider_id
 from copy_config import load_client_copy
 from ghl_calendar import CalendarReceiptError, appointment_body, free_slots_path, parse_free_slots
 from ghl_poll import fetch_inbound
+from ghl_webhook import ghl_webhook_fields
 from turn_engine import booking_instructions, fresh_state, run_turn
 
 # ---- config (env) ----
@@ -517,6 +518,41 @@ def accept_opt_in(p):
     return {"ok": True, "httpStatus": 200, "sent": bool(delivered.get("sent")), "reply": opener, "booked": False}
 
 
+def accept_ghl_form(p):
+    if not LIVE:
+        return {"ok": False, "httpStatus": 503, "sent": False, "message": "The relay is not live. Nothing was sent."}
+    fields = ghl_webhook_fields(p if isinstance(p, dict) else {})
+    contact = fields["contactId"]
+    if not contact:
+        return {"ok": False, "httpStatus": 400, "sent": False, "message": "Form webhook had no contact. Nothing was sent."}
+    opener = str(_client_copy().get("opener") or "").strip()
+    if "?" not in opener:
+        return {"ok": False, "httpStatus": 503, "sent": False, "message": "The opener does not invite a reply. Nothing was sent."}
+    con = db()
+    delivered = deliver_outbound(con, f"form-opener:{contact}", contact, "opener", opener)
+    if not delivered.get("ok"):
+        return {"ok": False, "httpStatus": 502, "sent": False, "message": "The opener was not confirmed. Nothing was marked consented."}
+    _mark_consent(con, contact)
+    if delivered.get("sent"):
+        con.execute("INSERT INTO turns VALUES(?,?,?,?)", (contact, "assistant", opener, time.time()))
+        con.commit()
+    return {"ok": True, "httpStatus": 200, "sent": bool(delivered.get("sent")), "reply": opener}
+
+
+def accept_ghl_reply(p):
+    if not LIVE:
+        return {"ok": False, "httpStatus": 503, "sent": False, "message": "The relay is not live. Nothing was sent."}
+    fields = ghl_webhook_fields(p if isinstance(p, dict) else {})
+    if not fields["contactId"] or not fields["text"]:
+        return {"ok": False, "httpStatus": 400, "sent": False, "message": "Reply webhook had no message. Nothing was sent."}
+    state = _load_engine(db(), fields["contactId"])
+    if not state.get("consented"):
+        return {"ok": False, "httpStatus": 403, "sent": False, "message": "This contact has not opted in through the form. Nothing was sent."}
+    result = handle(fields)
+    result["httpStatus"] = 200
+    return result
+
+
 def accept_pull(p):
     gate = accept_public(p, "pull")
     if not gate.get("ok"):
@@ -567,6 +603,10 @@ class H(BaseHTTPRequestHandler):
             out = accept_opt_in(p)
         elif path == "/pull":
             out = accept_pull(p)
+        elif path == "/ghl/form":
+            out = accept_ghl_form(p)
+        elif path == "/ghl/reply":
+            out = accept_ghl_reply(p)
         else:
             out = handle(p)
             out.setdefault("httpStatus", 200)
