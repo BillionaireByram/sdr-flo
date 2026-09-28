@@ -629,9 +629,11 @@ class H(BaseHTTPRequestHandler):
             out = accept_ghl_reply(p)
         elif path == "/inbound" and LIVE and c("RELAY_SENDER", "ghl").lower() == "ghl":
             out = accept_ghl_reply(p)
-        else:
+        elif path == "/inbound":
             out = handle(p)
             out.setdefault("httpStatus", 200)
+        else:
+            out = {"ok": False, "httpStatus": 404, "sent": False}
         status = int(out.get("httpStatus") or 200)
         self.send_response(status); self.send_header("Content-Type", "application/json"); self.end_headers()
         self.wfile.write(json.dumps(out).encode())
