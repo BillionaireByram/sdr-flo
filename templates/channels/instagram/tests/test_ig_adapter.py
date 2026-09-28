@@ -1,4 +1,5 @@
 import json, os, sqlite3, tempfile, unittest
+from unittest import mock
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -31,6 +32,11 @@ class T(unittest.TestCase):
         self.assertEqual(c.verify_challenge("subscribe", "vt123", "CHAL", "vt123"), "CHAL")
         self.assertIsNone(c.verify_challenge("subscribe", "wrong", "CHAL", "vt123"))
 
+    def test_post_signature_requires_an_app_secret(self):
+        c = MetaClient(token="x", ig_user_id="1")
+        self.assertFalse(c.valid_signature(b"{}", ""))
+        self.assertFalse(c.valid_signature(b"{}", "sha256=forged"))
+
     def test_02_keyword_comment_creates_spine_and_drafts(self):
         con, cfg, cl = fresh()
         r = ig.handle_comment({"comment_id": "c1", "text": "FLO", "from_igsid": "u1", "username": "lead1", "media_id": "m1"}, client=cl, cfg=cfg, con=con)
@@ -57,6 +63,17 @@ class T(unittest.TestCase):
         ig.handle_comment({"comment_id": "c4", "text": "FLO", "from_igsid": "u4"}, client=cl, cfg=cfg, con=con)
         r = ig.handle_message({"message_id": "x1", "sender_igsid": "u4", "text": "hey I run a roofing company"}, client=cl, cfg=cfg, con=con)
         self.assertTrue(r["reply"])
+        self.assertFalse(r["reply_accepted"])
+        self.assertFalse(con.execute("SELECT 1 FROM conversations WHERE igsid='u4' AND role='assistant'").fetchone())
+
+    def test_failed_dm_send_is_not_recorded_as_an_assistant_message(self):
+        con, cfg, cl = fresh()
+        ig.handle_comment({"comment_id": "c-fail", "text": "FLO", "from_igsid": "u-fail"}, client=cl, cfg=cfg, con=con)
+        with mock.patch.object(ig, "DRAFT_ONLY", False), \
+             mock.patch.object(cl, "send_dm", return_value={"error": "rejected"}):
+            result = ig.handle_message({"message_id": "m-fail", "sender_igsid": "u-fail", "text": "hi"}, client=cl, cfg=cfg, con=con)
+        self.assertFalse(result["reply_accepted"])
+        self.assertFalse(con.execute("SELECT 1 FROM conversations WHERE igsid='u-fail' AND role='assistant'").fetchone())
 
     def test_06_optout_suppresses(self):
         con, cfg, cl = fresh()

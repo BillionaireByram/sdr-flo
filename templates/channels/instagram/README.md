@@ -17,11 +17,13 @@ everything        → the spine (leads, conversations, events, sources)  [SQLite
 - `SOUL.byram.md` — the Byram-voice persona (per-niche persona config of the SDR Flo brain).
 - `config.example.json` — per-campaign CTA config (keyword `FLO`, offer, value_link, public/private toggles, opener copy).
 - `env.example` — Meta app + tokens + flags (all placeholders).
-- `tests/` — fixtures + 10 tests (verify, keyword→spine+draft, non-keyword no-DM, dedup, DM→brain, opt-out + guard suppression, no-internal-names/no-dashes, dry-run-no-send, envelope dispatch).
+- `tests/` — fixtures and tests for verification, keyword routing, drafts, deduplication, opt-out, and provider receipt handling.
 
 ## Safety (baked in)
 - **Shadow-first:** `SDR_FLO_DRAFT_ONLY=true` (default) drafts + persists everything, sends nothing. Live needs `IG_PUBLIC_REPLY_ENABLED` / `IG_PRIVATE_REPLY_ENABLED` flipped *and* draft-only off.
 - **Idempotent** on comment id + message id (no double public-reply/DM).
+- **Webhook signature required:** POST requests fail closed without a configured Meta app secret and a valid signature.
+- **Receipt-backed conversation:** drafts and rejected provider sends are never recorded as assistant messages. An uncertain send remains suppressed from automatic replay and needs operator review.
 - **Suppression** at intake + reply: booked/customer/existing-client/human-owned/opted-out/support/billing/refund/complaint + "stop"/"unsubscribe".
 - **Never** emits internal tool names; **no dashes** lead-facing; **never** fakes a booking.
 

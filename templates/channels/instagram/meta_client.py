@@ -37,9 +37,9 @@ class MetaClient:
         return None
 
     def valid_signature(self, raw_body: bytes, header_sig: str) -> bool:
-        """X-Hub-Signature-256 check. If no app_secret configured, skip (dev)."""
+        """Require a configured app secret and a valid X-Hub-Signature-256."""
         if not self.app_secret:
-            return True
+            return False
         if not header_sig or not header_sig.startswith("sha256="):
             return False
         digest = hmac.new(self.app_secret.encode(), raw_body, hashlib.sha256).hexdigest()

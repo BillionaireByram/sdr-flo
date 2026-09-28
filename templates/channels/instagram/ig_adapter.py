@@ -119,6 +119,13 @@ def clean(t):  # no dashes lead-facing
     return re.sub(r"(?<=[A-Za-z0-9])-(?=[A-Za-z0-9])", " ", t).strip()
 
 
+def accepted(response):
+    """A local draft or an error response is not a provider send receipt."""
+    return isinstance(response, dict) and not response.get("dry") and bool(
+        str(response.get("id") or response.get("message_id") or "").strip()
+    )
+
+
 # ---- handlers (pure + testable) ----
 def handle_comment(event, *, client=None, cfg=None, con=None):
     cfg = cfg or load_config(); con = con or db()
@@ -143,12 +150,20 @@ def handle_comment(event, *, client=None, cfg=None, con=None):
     # public reply (optional)
     if camp.get("public_reply_enabled") and client:
         pr = clean(camp.get("public_reply", "just dmd you, check your inbox"))
-        client.reply_to_comment(cid, pr); out["drafted"]["public_reply"] = pr
+        receipt = client.reply_to_comment(cid, pr)
+        out["drafted"]["public_reply"] = pr
+        out["public_reply_accepted"] = accepted(receipt)
+        if not out["public_reply_accepted"] and not DRAFT_ONLY:
+            logj({"delivery_unconfirmed": "public_reply", "comment_id": cid})
     # private DM opener (value-first, in persona voice + the value link)
     if camp.get("private_dm_enabled", True):
         opener = clean(camp.get("dm_opener", "Hey, appreciate you commenting. Here is what I mentioned: {link} . Quick q so I send the right angle, what does your business do?").replace("{link}", camp.get("value_link", "")))
-        if client: client.private_reply_to_comment(cid, opener)
-        con.execute("INSERT INTO conversations VALUES(?,?,?,?)", (igsid, "assistant", opener, time.time())); con.commit()
+        receipt = client.private_reply_to_comment(cid, opener) if client else None
+        out["private_reply_accepted"] = accepted(receipt)
+        if out["private_reply_accepted"]:
+            con.execute("INSERT INTO conversations VALUES(?,?,?,?)", (igsid, "assistant", opener, time.time())); con.commit()
+        elif not DRAFT_ONLY:
+            logj({"delivery_unconfirmed": "private_reply", "comment_id": cid})
         out["drafted"]["dm_opener"] = opener
     logj({"handled": "comment", **{k: out[k] for k in ("comment_id", "igsid", "campaign")}, "draft_only": DRAFT_ONLY})
     return out
@@ -183,11 +198,17 @@ def handle_message(event, *, client=None, cfg=None, con=None):
         elif a.get("tool") == "escalate":
             logj({"escalate": igsid, "reason": a.get("reason")})
     if reply:
-        if client: client.send_dm(igsid, reply)
-        con.execute("INSERT INTO conversations VALUES(?,?,?,?)", (igsid, "assistant", reply, time.time()))
-    con.execute("INSERT INTO events VALUES(?,?,?,?)", (igsid, "dm_reply", "{}", time.time())); con.commit()
+        receipt = client.send_dm(igsid, reply) if client else None
+        if accepted(receipt):
+            con.execute("INSERT INTO conversations VALUES(?,?,?,?)", (igsid, "assistant", reply, time.time()))
+        elif not DRAFT_ONLY:
+            logj({"delivery_unconfirmed": "dm", "igsid": igsid, "message_id": mid})
+    event_type = ("dm_reply_accepted" if reply and accepted(receipt) else
+                  "dm_reply_draft" if DRAFT_ONLY else "dm_reply_unconfirmed")
+    con.execute("INSERT INTO events VALUES(?,?,?,?)", (igsid, event_type, "{}", time.time())); con.commit()
     logj({"handled": "message", "igsid": igsid, "reply": reply[:120], "draft_only": DRAFT_ONLY})
-    return {"igsid": igsid, "reply": reply, "actions": out.get("actions", [])}
+    return {"igsid": igsid, "reply": reply, "reply_accepted": accepted(receipt) if reply else False,
+            "actions": out.get("actions", [])}
 
 
 def normalize_and_dispatch(payload, *, client=None, cfg=None, con=None):
