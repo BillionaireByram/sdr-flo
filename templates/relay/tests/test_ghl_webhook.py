@@ -67,11 +67,31 @@ class GhlWebhookTests(unittest.TestCase):
         fields = ghl_webhook_fields({
             "contact_id": "contact-1",
             "phone": "+15555550199",
-            "message": {"id": "msg-9", "body": "A putting green in Dallas"},
+            "message": {"id": "msg-9", "body": "A putting green in Dallas", "type": "IG"},
+            "locationId": "loc-1", "accountId": "business-ig",
         })
         self.assertEqual(fields["contactId"], "contact-1")
         self.assertEqual(fields["messageId"], "msg-9")
         self.assertIn("Dallas", fields["text"])
+        self.assertEqual(fields["channel"], "IG")
+        self.assertEqual(fields["locationId"], "loc-1")
+        self.assertEqual(fields["accountId"], "business-ig")
+
+    def test_ghl_reply_requires_real_id_and_matching_sender_scope(self):
+        base = {"contact_id": "contact-1", "text": "I want a call", "messageId": "msg-1",
+                "channel": "IG", "locationId": "loc-1", "accountId": "business-ig"}
+        with mock.patch.object(agent_service, "LIVE", True), \
+             mock.patch.dict(os.environ, {"GHL_LOCATION_ID": "loc-1", "RELAY_ALLOWED_ACCOUNT_IDS": "business-ig"}), \
+             mock.patch.object(agent_service, "handle", side_effect=AssertionError("handled")):
+            for change in ({"messageId": ""}, {"channel": "SMS"},
+                           {"locationId": "other"}, {"accountId": "personal-ig"}):
+                self.assertFalse(agent_service.accept_ghl_reply({**base, **change})["sent"])
+
+    def test_same_text_with_distinct_ids_stays_distinct(self):
+        first = ghl_webhook_fields({"contactId": "c", "text": "yes", "messageId": "a"})
+        second = ghl_webhook_fields({"contactId": "c", "text": "yes", "messageId": "b"})
+        self.assertNotEqual(first["messageId"], second["messageId"])
+        self.assertFalse(ghl_webhook_fields({"contactId": "c", "text": "yes"})["messageId"])
 
     def test_form_webhook_does_not_send_while_the_relay_is_off(self):
         with mock.patch.object(agent_service, "LIVE", False), \

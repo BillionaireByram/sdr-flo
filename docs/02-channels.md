@@ -19,12 +19,14 @@ One brain behind every channel. Each channel is either **gateway-native** or com
 This one adapter serves four channels; only the `type` changes.
 
 **Inbound** — a GHL workflow forwards each inbound message to the relay:
-- Trigger: **Customer Replied**, filtered to the channel + the enable tag (so the relay only ever sees opted-in leads).
+- Trigger: **Customer Replied**, filtered to the intended channel and campaign. Comment-triggered leads must have the enable tag before this workflow fires. A direct keyword DM can self-tag only on its first turn.
 - Action: **Custom Webhook** → `POST http://<relay>:<port>/inbound`, header `x-webhook-secret: <SECRET>`, body:
 ```json
-{ "contact_id":"{{contact.id}}", "text":"{{message.body}}", "tags":"{{contact.tags}}",
-  "first_name":"{{contact.first_name}}", "phone":"{{contact.phone}}", "channel":"ig|fb|tiktok|sms" }
+{ "contact_id":"{{contact.id}}", "text":"{{message.body}}", "messageId":"<GHL inbound message ID>",
+  "locationId":"<verified GHL location ID>", "accountId":"<verified source account ID>",
+  "first_name":"{{contact.first_name}}", "phone":"{{contact.phone}}", "channel":"IG" }
 ```
+Use actual GHL workflow variables for the message and source IDs; verify their rendered values with a controlled inbound event. A missing stable message ID, mismatched channel/location, or account outside `RELAY_ALLOWED_ACCOUNT_IDS` is rejected before reasoning or sending. Configure one relay instance per sender identity and channel with its own `GHL_MSG_TYPE`, location, account allowlist, persona, and state database. Never infer the sender identity from the contact alone.
 
 **Outbound** — `POST https://services.leadconnectorhq.com/conversations/messages`
 - Headers: `Authorization: Bearer <GHL_PIT>`, `Version: 2021-04-15`, **`User-Agent: Mozilla/5.0 ...`** (omit it → Cloudflare 1010).
@@ -32,6 +34,8 @@ This one adapter serves four channels; only the `type` changes.
 - Chunk messages over ~950 chars; stagger sends 100ms–1s; skip outbound echoes.
 
 **TikTok comment → DM** is a GHL automation (not the relay): comment contains the keyword → tag `*-lead` → public reply ("just sent you a dm") → opener DM → replies land in Conversations → the inbound webhook above. The relay supplies the copy; GHL fires it.
+
+**Instagram comment → DM (Client Zero):** in each verified Instagram account's GHL workflow, use the Instagram Comment trigger with an explicit post and keyword phrase; add the enable tag; send one initial DM through GHL's Reply to Comment via DM action; then route Customer Replied events to the scoped relay. Record the comment ID, tag readback, opener message ID, reply message ID, and appointment ID. Keep the personal `@billionaireb` and MyDigitalFlo company identities in separate workflows and relay instances. A keyword on a personal post must never enable an unrelated company conversation or take over an existing human thread. Disable any other automated reply/follow-up writer for the same account and contact segment before activation.
 
 ## SMS (GHL or Twilio)
 GHL SMS uses the adapter above (`type:SMS`). Twilio is the fallback for non-GHL / international: inbound webhook on receive, outbound `POST /Messages`. Compliance: explicit consent/opt-in, US 1 msg/sec, warmup (start ~10/day, ramp to ~150), strip dashes (carriers double-encode).

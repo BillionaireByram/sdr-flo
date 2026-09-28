@@ -21,6 +21,13 @@ The historical Sales Flo desktop Tailscale address timed out during this audit. 
 
 The current GHL gate does not cover ordinary Instagram DMs unless a workflow adds the enable tag or the lead opens with a configured campaign keyword. Expanding coverage requires an explicit account and lead-eligibility policy so private or human-owned conversations stay out of automation.
 
+## 2026-09-28 follow-up audit
+
+- The GHL Social Planner account read returned HTTP 200 with zero accounts. This does not establish the status of the separate GHL Conversations Instagram integration. The exact connected account IDs for `@billionaireb` and MyDigitalFlo remain unverified.
+- Twenty people read returned HTTP 200. Supabase `sales_flo_leads` read returned 41 leads: 20 new, 19 engaged, one qualifying, and one qualified. The current pipeline job mirrors Supabase to Twenty; it does not read Twenty operator changes back into the lead state used by Flo.
+- The active follow-up timer uses the Photon sender, while the requested app iMessage path is GHL. Do not activate a second follow-up sender on the same contacts until one-writer ownership, opt-out, cadence, and provider receipts are reconciled.
+- The shared relay now requires a stable GHL inbound message ID and matching channel/location; deployments can restrict source account IDs with `RELAY_ALLOWED_ACCOUNT_IDS`. These are source changes in draft PR #2, not live pod changes. The active pod relay has divergent booking/resource behavior and requires a reviewed migration.
+
 ## Channel acceptance receipts needed
 
 | Channel | Required controlled proof before unattended replies |

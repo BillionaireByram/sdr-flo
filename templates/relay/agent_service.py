@@ -557,11 +557,17 @@ def accept_ghl_reply(p):
     if not LIVE:
         return {"ok": False, "httpStatus": 503, "sent": False, "message": "The relay is not live. Nothing was sent."}
     fields = ghl_webhook_fields(p if isinstance(p, dict) else {})
-    if not fields["contactId"] or not fields["text"]:
+    if not fields["contactId"] or not fields["text"] or not fields["messageId"]:
         return {"ok": False, "httpStatus": 400, "sent": False, "message": "Reply webhook had no message. Nothing was sent."}
-    state = _load_engine(db(), fields["contactId"])
-    if not state.get("consented"):
-        return {"ok": False, "httpStatus": 403, "sent": False, "message": "This contact has not opted in through the form. Nothing was sent."}
+    expected_channel = GHL_MSG_TYPE.upper()
+    if fields["channel"].upper() != expected_channel:
+        return {"ok": False, "httpStatus": 403, "sent": False, "message": "Reply channel did not match the configured sender."}
+    expected_location = c("GHL_LOCATION_ID") or c("GHL_LOC")
+    if expected_location and fields["locationId"] != expected_location:
+        return {"ok": False, "httpStatus": 403, "sent": False, "message": "Reply location did not match the configured location."}
+    allowed_accounts = set(_csv("RELAY_ALLOWED_ACCOUNT_IDS"))
+    if allowed_accounts and fields["accountId"] not in allowed_accounts:
+        return {"ok": False, "httpStatus": 403, "sent": False, "message": "Reply account was not allowed."}
     result = handle(fields)
     result["httpStatus"] = 200
     return result
@@ -620,6 +626,8 @@ class H(BaseHTTPRequestHandler):
         elif path == "/ghl/form":
             out = accept_ghl_form(p)
         elif path == "/ghl/reply":
+            out = accept_ghl_reply(p)
+        elif path == "/inbound" and LIVE and c("RELAY_SENDER", "ghl").lower() == "ghl":
             out = accept_ghl_reply(p)
         else:
             out = handle(p)

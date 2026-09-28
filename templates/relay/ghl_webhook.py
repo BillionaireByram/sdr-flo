@@ -22,6 +22,9 @@ def ghl_webhook_fields(payload: dict) -> dict:
     else:
         body = _text(message.get("body") or message.get("text") or payload.get("body") or payload.get("text"))
         message_id = _text(message.get("id") or payload.get("message_id") or payload.get("messageId"))
-    if not message_id and contact_id and body:
-        message_id = f"ghl:{contact_id}:{body[:80]}"
-    return {"contactId": contact_id, "phone": phone, "text": body, "messageId": message_id}
+    channel = _text(payload.get("channel") or message.get("channel") or message.get("type"))
+    location_id = _text(payload.get("location_id") or payload.get("locationId") or contact.get("locationId"))
+    account_id = _text(payload.get("account_id") or payload.get("accountId"))
+    return {"contactId": contact_id, "phone": phone, "text": body,
+            "messageId": message_id, "channel": channel,
+            "locationId": location_id, "accountId": account_id}
