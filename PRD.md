@@ -29,13 +29,13 @@ All motions run the **same NEPQ stage machine**; only the final "close" stage an
 
 ## 4. Architecture — four layers
 
-**Brain** — one Flo across text + voice. **Pluggable reasoning backend** (OpenAI-compatible): a dedicated provider API key (GLM `glm-4.6`, recommended — never expires, single-tenant), Codex (`ai-flo -z`), or a client Max bridge. NEPQ + Cole Gordon + SPIN stage machine. Per-lead profile, injection-hardened, escalation triggers, self-improving.
+**Brain** — one Flo across text + voice. Reasoning uses the client's authenticated Codex or Claude Max subscription bridge, with a pinned model and no metered API fallback. NEPQ + Cole Gordon + SPIN stage machine. Per-lead profile, injection-hardened, escalation triggers, self-improving.
 
 **Spine** — Supabase, the single source of truth: `leads`, `conversations`, `events`, `lead_intel`, `acquisition_sources`. (Names standardized here; existing installs keep `sales_flo_leads` / `setter_flo_conversations` as stable identifiers.)
 
 **Face** — operator dashboard + Twenty CRM as read/work surfaces over the spine.
 
-**Hands** — channel adapters (GHL Conversations, Photon iMessage, Twilio, Gmail), Retell voice, Google Calendar booking.
+**Hands** — channel adapters (GHL Conversations, Photon iMessage, Twilio, AgentMail), voice provider, Google Calendar booking.
 
 **Guardian** — a proactive uptime watchdog on the client's own VM (spot → fix → report): heals a downed agent/brain and re-pokes any waiting conversation so no lead is ever left unanswered. See [docs/10-uptime-watchdog.md](docs/10-uptime-watchdog.md).
 
@@ -87,7 +87,7 @@ Per-client VM (Proxmox) or pod. One AI Flo engine, an isolated profile per agent
 ## 10. Install/duplication (Client → Client N)
 
 1. New Supabase project (the spine).
-2. Channel lines: GHL location (IG/FB/TikTok/SMS), Photon line (iMessage), Twilio (SMS fallback), Gmail (email), Retell agent+number (voice).
+2. Channel lines: GHL location (IG/FB/TikTok/SMS), Photon line (iMessage), Twilio (SMS fallback), approved AgentMail identity (email), verified voice agent and number.
 3. Client Google Calendar (booking).
 4. Client persona + objective in `SOUL.md` + skill.
 5. Deploy the relay + intelligence layer; seed offer/qualification config.

@@ -27,7 +27,7 @@ It is not a chatbot. It is an operator that runs a lead from first touch to obje
 | **Brain** | One Flo: qualify, convert, follow up, reactivate, self-improve | AI Flo / Hermes agent (Codex or client Claude Max — **zero API credits**) + the NEPQ stage machine |
 | **Spine** | Single source of truth for every lead, message, event, score | **Supabase** (`leads`, `conversations`, `events`, `lead_intel`, `acquisition_sources`) |
 | **Face** | Where the operator sees the business | Operator dashboard + Twenty CRM (read/work surface over the spine) |
-| **Hands** | Reach the lead + take action | Channel adapters (GHL Conversations, Photon iMessage, Twilio, Gmail), Retell voice, Google Calendar |
+| **Hands** | Reach the lead + take action | Channel adapters (GHL Conversations, Photon iMessage, Twilio, AgentMail), voice provider, Google Calendar |
 
 ## The channels (one brain behind all of them)
 
@@ -37,7 +37,7 @@ It is not a chatbot. It is an operator that runs a lead from first touch to obje
 | TikTok DM | GHL native TikTok → Conversations relay | [docs/02-channels.md](docs/02-channels.md) |
 | SMS | GHL SMS or Twilio | [docs/02-channels.md](docs/02-channels.md) |
 | iMessage | Photon line + sidecar | [docs/02-channels.md](docs/02-channels.md) |
-| Email | Gmail connector (IMAP/SMTP) or AgentMail | [docs/02-channels.md](docs/02-channels.md) |
+| Email | Approved AgentMail sender | [docs/02-channels.md](docs/02-channels.md) |
 | Voice | Retell (or any provider), warm-only | [docs/02-channels.md](docs/02-channels.md) |
 | Webinar funnel | WebinarKit / Zoom → registration + attendance | [docs/02-channels.md](docs/02-channels.md) |
 

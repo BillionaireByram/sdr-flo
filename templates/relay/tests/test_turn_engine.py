@@ -219,7 +219,7 @@ class RelayWireTests(unittest.TestCase):
         with mock.patch.object(agent_service, "contact_tags", return_value=["ai-dm-start"]), \
              mock.patch.object(agent_service, "ghl", side_effect=fake_ghl), \
              mock.patch.object(agent_service, "think", side_effect=fake_think), \
-             mock.patch.object(agent_service, "send_reply", side_effect=lambda contact, text: sent.append(text)), \
+             mock.patch.object(agent_service, "send_reply", side_effect=lambda contact, text: sent.append(text) or {"ok": True, "provider_id": f"msg-{len(sent)}"}), \
              mock.patch.object(agent_service, "LIVE", True), \
              mock.patch.dict(os.environ, {"GHL_CALENDAR_ID": "cal-1", "GHL_LOCATION_ID": "loc-1", "GHL_APPOINTMENT_NOTIFY": "false"}):
             agent_service.handle({"contactId": "contact-1", "messageId": "a", "text": "lawn"})

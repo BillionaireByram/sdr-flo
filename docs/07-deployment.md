@@ -37,7 +37,7 @@ Templates in [../templates/deploy/](../templates/deploy/).
 1. VM (clone template) + Tailscale + engine at `/opt/...`.
 2. Profile home + `SOUL.md` (offer, persona, **objective**) + `skills/appointment-setter` + Codex/Max auth.
 3. Supabase project (the spine) + creds in `.env` (0600).
-4. Channels the client uses: GHL location (IG/FB/TikTok/SMS), Photon line (iMessage), Twilio (SMS fallback), Gmail (email), Retell agent+number (voice), Google Calendar (booking).
+4. Channels the client uses: GHL location (IG/FB/TikTok/SMS), Photon line (iMessage), Twilio (SMS fallback), approved AgentMail identity (email), verified voice agent and number, Google Calendar (booking).
 5. Relay service + the channel webhooks → `:PORT/inbound`.
 6. Reliability timers + intelligence layer (shadow mode).
 7. Dry-run the gauntlet; flip live one channel at a time; keep the prior system as warm rollback.

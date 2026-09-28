@@ -3,8 +3,8 @@
 SDR Flo — channel relay (reference template, generalized from the Takeoff Setter).
 
 Capture -> reason (one brain) -> reply, for any non-gateway channel
-(IG / FB / TikTok / SMS via GHL Conversations; swap send_reply() for Twilio,
-Photon, or SMTP). Battle-tested invariants are baked in:
+(IG / FB / TikTok / SMS via GHL Conversations; other verified adapters
+can implement their own send path). Battle-tested invariants are baked in:
 
   * secret-validated inbound
   * FAIL-CLOSED tag gate (checks the CRM live, not just the webhook payload)
@@ -47,13 +47,11 @@ KEYWORDS    = [k.strip().lower() for k in c("RELAY_KEYWORDS", "").split(",") if 
 GUARD_TAGS  = [t.strip().lower() for t in c("RELAY_GUARD_TAGS",
                 "existing-client,manual,dnd,do-not-contact").split(",")]
 # ---- reasoning backend (pluggable, OpenAI-compatible) ----
-# Point at ANY OpenAI-compatible endpoint: a dedicated provider API (GLM via api.z.ai, OpenRouter),
-# a Codex (ai-flo -z) bridge, or a local Claude Max CLI bridge on :8787.
-# LESSON (Takeoff outage): an OAuth token shared across machines rotates and DIES silently. A dedicated
-# provider API KEY never expires and is single-tenant per client -> the most stable brain. Prefer it.
+# Point only at the client's authenticated subscription bridge. A metered provider
+# endpoint must never become an implicit fallback for an unattended relay.
 BRIDGE       = c("RELAY_BRIDGE", "http://127.0.0.1:8787/v1/chat/completions")
-MODEL        = c("RELAY_MODEL", "glm-4.6")
-BRAIN_KEY    = c("RELAY_BRAIN_KEY") or c("GLM_API_KEY") or "x"   # provider key; "x" for a no-auth local bridge
+MODEL        = c("RELAY_MODEL")
+BRAIN_KEY    = c("RELAY_BRAIN_KEY") or "x"   # only for a local bridge that expects a placeholder
 BRAIN_MAXTOK = int(c("RELAY_BRAIN_MAX_TOKENS", "1024"))
 # channel send (GHL Conversations example)
 GHL_API     = "https://services.leadconnectorhq.com"
@@ -67,7 +65,8 @@ TOOLS_DOC = ('Return STRICT JSON only: {"reply":"<lead-facing message, empty if 
 def logj(o):
     o["ts"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
     Path(DB).parent.mkdir(parents=True, exist_ok=True)
-    open(LOG, "a").write(json.dumps(o) + "\n")
+    with open(LOG, "a") as log_file:
+        log_file.write(json.dumps(o) + "\n")
 
 def db():
     con = sqlite3.connect(DB)
@@ -95,8 +94,8 @@ def ghl(method, path, body=None):
 def contact_tags(contact):
     """Authoritative tags from the CRM (fail-closed: None on failure -> skip)."""
     s, d = ghl("GET", f"/contacts/{contact}")
-    if isinstance(d, dict):
-        return [str(t).strip().lower() for t in ((d.get("contact") or {}).get("tags") or [])]
+    if s == 200 and isinstance(d, dict) and isinstance(d.get("contact"), dict):
+        return [str(t).strip().lower() for t in (d["contact"].get("tags") or [])]
     return None
 
 def send_reply(contact, text):
@@ -111,19 +110,10 @@ def send_reply(contact, text):
         return {"ok": bool(provider_id), "provider_id": provider_id or ""}
     s, d = ghl("POST", "/conversations/messages",
                {"type": GHL_MSG_TYPE, "contactId": contact, "message": text})
-    # Channel fallback: the same CRM location often holds IG + SMS leads. Sending the wrong
-    # type for a conversation returns 422 and the reply silently never delivers. Fall back.
-    if s in (400, 422):
-        for alt in ("SMS", "Email", "FB"):
-            if alt == GHL_MSG_TYPE: continue
-            s2, _ = ghl("POST", "/conversations/messages",
-                        {"type": alt, "contactId": contact, "message": text})
-            if s2 in (200, 201):
-                logj({"act": "send-fallback", "type": alt, "status": s2, "contact": contact}); s = s2; break
     provider_id = ""
     if isinstance(d, dict):
         provider_id = str(d.get("messageId") or d.get("id") or "").strip()
-    logj({"act": "send", "status": s, "contact": contact, "has_receipt": bool(provider_id)})
+    logj({"act": "send", "status": s, "channel": GHL_MSG_TYPE, "contact": contact, "has_receipt": bool(provider_id)})
     return {"ok": s in (200, 201) and bool(provider_id), "provider_id": provider_id}
 
 def _send_loop(text):
@@ -193,8 +183,11 @@ def deliver_outbound(con, dedupe_key, contact, kind, body):
 
 
 def add_tags(contact, tags):
-    if tags and LIVE: ghl("POST", f"/contacts/{contact}/tags", {"tags": tags})
-    logj({"act": "tag", "contact": contact, "add": tags, "dry": not LIVE})
+    status = 0
+    if tags and LIVE:
+        status, _ = ghl("POST", f"/contacts/{contact}/tags", {"tags": tags})
+    logj({"act": "tag", "contact": contact, "add": tags, "dry": not LIVE, "status": status})
+    return status in (200, 201, 204)
 
 def escalate(contact, reason):
     logj({"act": "escalate", "contact": contact, "reason": reason})
@@ -256,6 +249,9 @@ def clean_text(t):
 
 # ---- the brain ----
 def think(hist, inbound, profile):
+    if not MODEL:
+        logj({"error": "brain-model-not-configured"})
+        return {"reply": "", "actions": []}
     prof = ("\n\n## WHAT YOU ALREADY KNOW (never re-ask):\n" + json.dumps(profile)) if profile else ""
     tools = TOOLS_DOC
     if c("GHL_CALENDAR_ID") and c("GHL_LOCATION_ID"):
@@ -375,7 +371,10 @@ def handle(p):
         # Keyword-OR-tag: if they OPENED with a campaign keyword, self-tag + engage (don't wait on
         # the CRM to tag them). Otherwise skip — this is what keeps the bot out of personal DMs.
         if KEYWORDS and any(k in (text or "").lower() for k in KEYWORDS):
-            add_tags(contact, [ENABLE_TAG]); tags.append(ENABLE_TAG)
+            if not add_tags(contact, [ENABLE_TAG]):
+                logj({"skip": "selftag-failed", "contact": contact})
+                return {"ok": True, "skipped": "selftag-failed", "sent": False}
+            tags.append(ENABLE_TAG)
             logj({"selftag": ENABLE_TAG, "contact": contact})
         else:
             logj({"skip": "not-keyword-lead", "contact": contact}); return {"ok": True, "skipped": "not-keyword-lead"}
@@ -454,12 +453,19 @@ def handle(p):
             delivered = deliver_outbound(con, f"reply:{event_id or 'none'}", contact, "reply", reply)
             sent = bool(delivered.get("ok"))
         else:
-            send_reply(contact, reply)
-            sent = True
+            try:
+                receipt = send_reply(contact, reply)
+                sent = bool(isinstance(receipt, dict) and receipt.get("ok") and receipt.get("provider_id"))
+            except Exception as exc:
+                logj({"act": "send", "contact": contact, "error": str(exc)[:160]})
+            if not sent:
+                logj({"act": "delivery_unconfirmed", "contact": contact, "event_id": event_id})
         if sent:
             con.execute("INSERT INTO turns VALUES(?,?,?,?)", (contact, "assistant", reply, time.time())); con.commit()
-    logj({"handled": True, "contact": contact, "reply": (reply or "")[:120], "booked": bool(effect.get("booked"))})
-    return {"ok": True, "reply": reply if sent or not effect.get("booked") else "", "sent": sent, "duplicate": False, "booked": bool(effect.get("booked") and sent)}
+    logj({"handled": True, "contact": contact, "reply": (reply or "")[:120], "booked": bool(effect.get("booked") and sent), "sent": sent})
+    return {"ok": True, "reply": reply if sent or not effect.get("booked") else "", "sent": sent,
+            "delivery_unconfirmed": bool(effect.get("send") and reply and not sent),
+            "duplicate": False, "booked": bool(effect.get("booked") and sent)}
 
 def _phone_last4(phone: str) -> str:
     digits = "".join(ch for ch in phone if ch.isdigit())
