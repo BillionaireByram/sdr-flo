@@ -283,6 +283,13 @@ def _csv(name):
     return tuple(item.strip() for item in c(name, "").split(",") if item.strip())
 
 
+def matches_campaign_keyword(text, keywords):
+    """Match a complete campaign phrase, not a substring inside another word."""
+    normalized = re.sub(r"\s+", " ", str(text or "").strip().lower())
+    return any(re.search(r"(?<!\w)" + re.escape(keyword) + r"(?!\w)", normalized)
+               for keyword in keywords if keyword)
+
+
 def _client_copy():
     return load_client_copy(c("RELAY_COPY_FILE"))
 
@@ -370,7 +377,8 @@ def handle(p):
     if not state.get("consented") and ENABLE_TAG and ENABLE_TAG not in tags:
         # Keyword-OR-tag: if they OPENED with a campaign keyword, self-tag + engage (don't wait on
         # the CRM to tag them). Otherwise skip — this is what keeps the bot out of personal DMs.
-        if KEYWORDS and any(k in (text or "").lower() for k in KEYWORDS):
+        prior_turn = con.execute("SELECT 1 FROM turns WHERE contact=? LIMIT 1", (contact,)).fetchone()
+        if KEYWORDS and not prior_turn and not state["handled_events"] and matches_campaign_keyword(text, KEYWORDS):
             if not add_tags(contact, [ENABLE_TAG]):
                 logj({"skip": "selftag-failed", "contact": contact})
                 return {"ok": True, "skipped": "selftag-failed", "sent": False}

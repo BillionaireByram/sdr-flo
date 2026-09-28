@@ -9,6 +9,7 @@ Target: Byram's Client Zero installation. This is a point-in-time read-only audi
 | Team pod | `ig-ghl-relay.service` and `ai-flo-agent@sales-flo.service` active on `digitalflo-team-pod-01` | Process state only |
 | GHL relay | Listening on port 8821, `RELAY_LIVE=true`, message type `IG` | No current matched inbound/outbound provider receipt |
 | GHL credential | Read-only location lookup returned HTTP 200 using the relay's configured token | Confirms location API access, not Instagram connection or message delivery |
+| Recent Instagram inbox | GHL search returned ten Instagram conversations; three latest messages were inbound and had no matching relay turns | Those three contacts had neither the relay enable tag nor a configured keyword, so the current gate intentionally skipped them |
 | Relay source | `/opt/ig-ghl-relay/agent_service.py`, SHA-256 `3995e5e09c961445dcb37aee70a6292a24f72edafb95f43caca617330d7e70d0` | Diverges from this repo's improved template |
 | Relay log | Last modified about 37 hours before audit | No current conversation proof |
 | Social adapter | `social-sdr-zernio.service` inactive; its dedicated runtime env absent | No social cutover proof |
@@ -17,6 +18,8 @@ Target: Byram's Client Zero installation. This is a point-in-time read-only audi
 | Calls and direct Meta | Retell and Meta keys absent from the GHL relay env; no matching voice service found on the team pod | Other hosts and provider accounts were not ruled out |
 
 The historical Sales Flo desktop Tailscale address timed out during this audit. The team pod is the only Sales runtime reached and checked here.
+
+The current GHL gate does not cover ordinary Instagram DMs unless a workflow adds the enable tag or the lead opens with a configured campaign keyword. Expanding coverage requires an explicit account and lead-eligibility policy so private or human-owned conversations stay out of automation.
 
 ## Channel acceptance receipts needed
 

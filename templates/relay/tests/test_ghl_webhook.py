@@ -16,6 +16,12 @@ import agent_service
 
 
 class GhlWebhookTests(unittest.TestCase):
+    def test_keyword_gate_matches_a_complete_word_or_phrase(self):
+        self.assertTrue(agent_service.matches_campaign_keyword("Tell me about FLO", ["flo"]))
+        self.assertTrue(agent_service.matches_campaign_keyword("I want the AI guide", ["ai guide"]))
+        self.assertFalse(agent_service.matches_campaign_keyword("mail me", ["ai"]))
+        self.assertFalse(agent_service.matches_campaign_keyword("flow state", ["flo"]))
+
     def test_missing_model_fails_closed_before_calling_a_bridge(self):
         with mock.patch.object(agent_service, "MODEL", ""), \
              mock.patch.object(agent_service.urllib.request, "urlopen", side_effect=AssertionError("bridge called")):
@@ -44,6 +50,18 @@ class GhlWebhookTests(unittest.TestCase):
              mock.patch.object(agent_service, "KEYWORDS", ["flo"]):
             result = agent_service.handle({"contactId": "contact-unreadable", "text": "FLO", "messageId": "unreadable-1"})
         self.assertEqual(result["skipped"], "tag-fetch-failed")
+
+    def test_keyword_cannot_take_over_an_existing_thread(self):
+        contact = "contact-existing-thread"
+        con = agent_service.db()
+        con.execute("INSERT INTO turns VALUES(?,?,?,?)", (contact, "user", "earlier human chat", 1.0))
+        con.commit()
+        with mock.patch.object(agent_service, "contact_tags", return_value=[]), \
+             mock.patch.object(agent_service, "KEYWORDS", ["flo"]), \
+             mock.patch.object(agent_service, "add_tags", side_effect=AssertionError("tagged")), \
+             mock.patch.object(agent_service, "think", side_effect=AssertionError("reasoned")):
+            result = agent_service.handle({"contactId": contact, "text": "FLO", "messageId": "existing-1"})
+        self.assertEqual(result["skipped"], "not-keyword-lead")
 
     def test_customer_replied_shape(self):
         fields = ghl_webhook_fields({
