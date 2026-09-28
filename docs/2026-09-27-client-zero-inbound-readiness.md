@@ -13,7 +13,8 @@ Target: Byram's Client Zero installation. This is a point-in-time read-only audi
 | Relay log | Last modified about 37 hours before audit | No current conversation proof |
 | Social adapter | `social-sdr-zernio.service` inactive; its dedicated runtime env absent | No social cutover proof |
 | Sales Flo model | Top profile contains `provider: zai` and a `gpt-4o-mini` fallback; relay names `grok-4.6` through a bridge | Subscription-only behavior and actual provider acceptance unproven |
-| iMessage and calls | Photon, Loop, Retell, and Meta keys absent from the GHL relay env | Other hosts or provider accounts were not ruled out |
+| iMessage | `setter-flo-imessage.service` active; bridge timer recently completed successfully and reported zero new messages across one lead | A live inbound, reply receipt, and human view remain unverified |
+| Calls and direct Meta | Retell and Meta keys absent from the GHL relay env; no matching voice service found on the team pod | Other hosts and provider accounts were not ruled out |
 
 The historical Sales Flo desktop Tailscale address timed out during this audit. The team pod is the only Sales runtime reached and checked here.
 
