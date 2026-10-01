@@ -16,15 +16,82 @@ import agent_service
 
 
 class GhlWebhookTests(unittest.TestCase):
+    def test_keyword_gate_matches_a_complete_word_or_phrase(self):
+        self.assertTrue(agent_service.matches_campaign_keyword("Tell me about FLO", ["flo"]))
+        self.assertTrue(agent_service.matches_campaign_keyword("I want the AI guide", ["ai guide"]))
+        self.assertFalse(agent_service.matches_campaign_keyword("mail me", ["ai"]))
+        self.assertFalse(agent_service.matches_campaign_keyword("flow state", ["flo"]))
+
+    def test_missing_model_fails_closed_before_calling_a_bridge(self):
+        with mock.patch.object(agent_service, "MODEL", ""), \
+             mock.patch.object(agent_service.urllib.request, "urlopen", side_effect=AssertionError("bridge called")):
+            result = agent_service.think([], "hello", {})
+        self.assertEqual(result, {"reply": "", "actions": []})
+
+    def test_rejected_reply_is_not_recorded_as_sent_or_retried_on_another_channel(self):
+        contact = "contact-rejected"
+        with mock.patch.object(agent_service, "LIVE", True), \
+             mock.patch.object(agent_service, "contact_tags", return_value=[agent_service.ENABLE_TAG]), \
+             mock.patch.object(agent_service, "think", return_value={"reply": "What are you looking for?", "actions": [], "profile": {}}), \
+             mock.patch.object(agent_service, "ghl", return_value=(422, {"error": "wrong channel"})) as provider:
+            result = agent_service.handle({"contactId": contact, "text": "hello", "messageId": "rejected-1"})
+        self.assertFalse(result["sent"])
+        self.assertTrue(result["delivery_unconfirmed"])
+        self.assertEqual(provider.call_count, 1)
+        self.assertEqual(provider.call_args.args[2]["type"], agent_service.GHL_MSG_TYPE)
+        self.assertFalse(agent_service.db().execute(
+            "SELECT 1 FROM turns WHERE contact=? AND role='assistant'", (contact,)
+        ).fetchone())
+
+    def test_failed_contact_read_cannot_open_the_keyword_gate(self):
+        with mock.patch.object(agent_service, "ghl", return_value=(503, {"contact": {"tags": []}})), \
+             mock.patch.object(agent_service, "think", side_effect=AssertionError("reasoned")), \
+             mock.patch.object(agent_service, "send_reply", side_effect=AssertionError("sent")), \
+             mock.patch.object(agent_service, "KEYWORDS", ["flo"]):
+            result = agent_service.handle({"contactId": "contact-unreadable", "text": "FLO", "messageId": "unreadable-1"})
+        self.assertEqual(result["skipped"], "tag-fetch-failed")
+
+    def test_keyword_cannot_take_over_an_existing_thread(self):
+        contact = "contact-existing-thread"
+        con = agent_service.db()
+        con.execute("INSERT INTO turns VALUES(?,?,?,?)", (contact, "user", "earlier human chat", 1.0))
+        con.commit()
+        with mock.patch.object(agent_service, "contact_tags", return_value=[]), \
+             mock.patch.object(agent_service, "KEYWORDS", ["flo"]), \
+             mock.patch.object(agent_service, "add_tags", side_effect=AssertionError("tagged")), \
+             mock.patch.object(agent_service, "think", side_effect=AssertionError("reasoned")):
+            result = agent_service.handle({"contactId": contact, "text": "FLO", "messageId": "existing-1"})
+        self.assertEqual(result["skipped"], "not-keyword-lead")
+
     def test_customer_replied_shape(self):
         fields = ghl_webhook_fields({
             "contact_id": "contact-1",
             "phone": "+15555550199",
-            "message": {"id": "msg-9", "body": "A putting green in Dallas"},
+            "message": {"id": "msg-9", "body": "A putting green in Dallas", "type": "IG"},
+            "locationId": "loc-1", "accountId": "business-ig",
         })
         self.assertEqual(fields["contactId"], "contact-1")
         self.assertEqual(fields["messageId"], "msg-9")
         self.assertIn("Dallas", fields["text"])
+        self.assertEqual(fields["channel"], "IG")
+        self.assertEqual(fields["locationId"], "loc-1")
+        self.assertEqual(fields["accountId"], "business-ig")
+
+    def test_ghl_reply_requires_real_id_and_matching_sender_scope(self):
+        base = {"contact_id": "contact-1", "text": "I want a call", "messageId": "msg-1",
+                "channel": "IG", "locationId": "loc-1", "accountId": "business-ig"}
+        with mock.patch.object(agent_service, "LIVE", True), \
+             mock.patch.dict(os.environ, {"GHL_LOCATION_ID": "loc-1", "RELAY_ALLOWED_ACCOUNT_IDS": "business-ig"}), \
+             mock.patch.object(agent_service, "handle", side_effect=AssertionError("handled")):
+            for change in ({"messageId": ""}, {"channel": "SMS"},
+                           {"locationId": "other"}, {"accountId": "personal-ig"}):
+                self.assertFalse(agent_service.accept_ghl_reply({**base, **change})["sent"])
+
+    def test_same_text_with_distinct_ids_stays_distinct(self):
+        first = ghl_webhook_fields({"contactId": "c", "text": "yes", "messageId": "a"})
+        second = ghl_webhook_fields({"contactId": "c", "text": "yes", "messageId": "b"})
+        self.assertNotEqual(first["messageId"], second["messageId"])
+        self.assertFalse(ghl_webhook_fields({"contactId": "c", "text": "yes"})["messageId"])
 
     def test_form_webhook_does_not_send_while_the_relay_is_off(self):
         with mock.patch.object(agent_service, "LIVE", False), \

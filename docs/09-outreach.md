@@ -19,7 +19,7 @@ Do this before a single send. Most "my cold email doesn't work" is a Layer 0 fai
 - **Performance-based inbox rotation** (route volume to the best-placing inboxes, not blind round-robin).
 - **List verification + waterfall** (Layer 2) to keep **bounce < 2–3%**; **spam-complaint < 0.1%** (Google enforces < 0.3%).
 - First touch: **plain text, ≤ 1 link (ideally zero), no images, no tracking pixels.** Custom tracking domain only if tracking at all.
-- Infra is a buy/operate decision (Primeforge / Mailforge / Infraforge / Instantly / Smartlead / Maildoso for inboxes + warmup). The framework stays tool-agnostic; the relay just needs SMTP/IMAP per the Gmail connector ([02-channels.md](02-channels.md)).
+- Outbound email remains a separate launch decision. Any send must use the verified AgentMail identity and mandatory Byram CC in [02-channels.md](02-channels.md).
 
 ## Layer 1 — Signal-first targeting (the biggest lever)
 Stop emailing a static ICP list. **Anchor every prospect to a real buying signal** — that is the 5x.
@@ -59,7 +59,7 @@ This is what makes it SDR Flo and not just a blaster.
 - Classify every reply (positive / curious / objection / referral / not-now / unsubscribe / OOO).
 - **Positive/curious → route into the relay** → the NEPQ brain takes over to qualify → convert (book / community / sell / webinar), carrying the research + signal context. Fast speed-to-lead.
 - Unsubscribe/negative → suppress + stop. OOO → reschedule the next touch.
-- Email send + inbox read use the **Gmail connector** ([02-channels.md](02-channels.md)); reply events log to `outreach_events` + the spine.
+- Email send + inbox read require the approved AgentMail route ([02-channels.md](02-channels.md)); reply events log to `outreach_events` + the spine.
 
 ## Layer 8 — Metrics & the learning loop
 - **North star: reply rate + positive-reply rate** (per campaign, per signal type, per inbox). Track bounce, spam-complaint, and per-domain reputation health as guardrails. Opens are noise.
@@ -71,7 +71,7 @@ CAN-SPAM (US): truthful headers, real physical address, working unsubscribe hono
 ## Mapping to the existing build + what to add
 **Already built (`digitalflo-app`):** the model (`lib/acquisition-engine/cold-outreach.ts`), 8-table schema, API routes (prospects/approvals/send/compliance), dashboard UI, gift assets. Keep it as the **control plane**.
 **Add for runtime:**
-1. Layer 0 infra (domains/inboxes/warmup) — buy/operate; wire SMTP/IMAP to the Gmail connector.
+1. Verify the approved AgentMail sender, recipient rules, domain authentication, and inbound event route.
 2. `signal_*` fields on prospects + a signal-source step (Layer 1).
 3. Waterfall enrichment + verification step (Layer 2).
 4. The **send loop** (cap-aware, rotation, schedule-aware) + warmup guardrails.

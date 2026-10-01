@@ -13,7 +13,7 @@ SDR Flo is four layers. Keep them separate; never collapse them.
         │          HANDS            │   │         SPINE          │
         │ channel adapters + relay  │   │  Supabase = truth      │
         │ GHL / Photon / Twilio /   │   │  leads, conversations, │
-        │ Gmail / Retell / Calendar │   │  events, lead_intel,   │
+        │ AgentMail / voice / Cal   │   │  events, lead_intel,   │
         └───────────────▲───────────┘   │  acquisition_sources   │
                         │               └────────▲───────────────┘
                    lead │ channel                │ read/work
@@ -48,7 +48,7 @@ channel inbound (webhook)  →  relay :PORT/inbound
     one-shot reasoning over the brain (Codex/Max), with the SOUL + skill
     → {reply, actions, profile}
     strip dashes · suppress degenerate/empty output · retry on bad output
-    send reply via channel adapter (GHL Conversations / Twilio / Photon / SMTP)
+    send reply via the verified channel adapter (GHL / Twilio / Photon / AgentMail)
     apply tags · mirror to Supabase (conversations + events, channel-tagged)
 ```
 
